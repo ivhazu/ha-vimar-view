@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500">
+  <rect width="500" height="500" fill="#E30613" rx="60"/>
+  <text x="250" y="310" font-family="Arial,sans-serif" font-size="160" font-weight="bold"
+        fill="white" text-anchor="middle" letter-spacing="4">VIMAR</text>
+  <text x="250" y="420" font-family="Arial,sans-serif" font-size="60"
+        fill="white" text-anchor="middle" opacity="0.85">View Cloud</text>
+</svg>

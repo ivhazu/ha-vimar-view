@@ -1,0 +1,22 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configura Vimar View Cloud",
+        "description": "Inserisci le credenziali MyVimar e il DUID del tuo gateway.\n\nIl DUID si trova nell'app Vimar View: Impostazioni → Info gateway. Formato esempio: 012908FAB00699",
+        "data": {
+          "username": "Email MyVimar",
+          "password": "Password MyVimar",
+          "duid": "DUID Gateway"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Credenziali non valide. Verifica email e password MyVimar.",
+      "cannot_connect": "Impossibile connettersi al cloud Vimar. Verifica la connessione internet."
+    },
+    "abort": {
+      "already_configured": "Il gateway è già configurato."
+    }
+  }
+}
