@@ -3,7 +3,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/Home%20Assistant-2024.1%2B-blue.svg)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.5.1-brightgreen.svg)](https://github.com/ivhazu/ha-vimar-view/releases)
+[![Version](https://img.shields.io/badge/version-1.5.2-brightgreen.svg)](https://github.com/ivhazu/ha-vimar-view/releases)
 
 > 🇮🇹 [Italiano](#italiano) | 🇬🇧 [English](#english)
 
