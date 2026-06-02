@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Configura Vimar View Cloud",
-        "description": "Inserisci le credenziali MyVimar e il DUID del tuo gateway.\n\nIl DUID si trova nell'app Vimar View: Impostazioni → Info gateway. Formato esempio: 012908FAB00699",
+        "description": "Inserisci le credenziali MyVimar e il DUID del tuo gateway.\n\nIl DUID si trova nell'app Vimar View: Impostazioni → Info gateway. Formato esempio: 000000AAA00000",
         "data": {
           "username": "Email MyVimar",
           "password": "Password MyVimar",

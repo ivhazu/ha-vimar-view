@@ -3,7 +3,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/Home%20Assistant-2024.1%2B-blue.svg)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.4.0-brightgreen.svg)](https://github.com/ivhazu/ha-vimar-view/releases)
+[![Version](https://img.shields.io/badge/version-1.5.1-brightgreen.svg)](https://github.com/ivhazu/ha-vimar-view/releases)
 
 > 🇮🇹 [Italiano](#italiano) | 🇬🇧 [English](#english)
 
@@ -109,12 +109,12 @@ Il DUID è l'identificatore univoco del tuo gateway Vimar 14597. Puoi trovarlo i
 1. Apri l'app **Vimar View** sul telefono
 2. Vai in **Impostazioni** (icona ⚙️ in alto a destra)
 3. Tocca **Info gateway**
-4. Il DUID è mostrato nel formato `012908FAB00699`
+4. Il DUID è mostrato nel formato `000000AAA00000`
 
 #### Metodo 2 — Da mitmproxy (avanzato)
 Se non riesci a trovarlo nell'app, puoi catturarlo intercettando il traffico dell'app con mitmproxy. Il DUID appare nell'URL della connessione WebSocket:
 ```
-wss://prod.vimar.cloud/wssmqtt/deviceproxy?duid=012908FAB00699&access_token=...
+wss://prod.vimar.cloud/wssmqtt/deviceproxy?duid=000000AAA00000&access_token=...
 ```
 
 ---
@@ -254,12 +254,12 @@ The DUID is the unique identifier of your Vimar 14597 gateway. You can find it i
 1. Open the **Vimar View** app on your phone
 2. Go to **Settings** (⚙️ icon top right)
 3. Tap **Gateway info**
-4. The DUID is shown in format `012908FAB00699`
+4. The DUID is shown in format `000000AAA00000`
 
 #### Method 2 — Via mitmproxy (advanced)
 If you can't find it in the app, you can capture it by intercepting the app's traffic with mitmproxy. The DUID appears in the WebSocket connection URL:
 ```
-wss://prod.vimar.cloud/wssmqtt/deviceproxy?duid=012908FAB00699&access_token=...
+wss://prod.vimar.cloud/wssmqtt/deviceproxy?duid=000000AAA00000&access_token=...
 ```
 
 ---
