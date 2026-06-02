@@ -17,15 +17,33 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = [Platform.LIGHT, Platform.SENSOR, Platform.SELECT, Platform.BUTTON, Platform.NUMBER]
 
+CONF_REFRESH_TOKEN = "refresh_token"
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Vimar Cloud from a config entry."""
+
+    # Load saved refresh token if available (avoids full login on restart)
+    saved_refresh_token: str | None = entry.data.get(CONF_REFRESH_TOKEN)
+
     client = VimarCloudClient(
         username=entry.data[CONF_USERNAME],
         password=entry.data[CONF_PASSWORD],
         duid=entry.data[CONF_DUID],
         plant_uid=entry.data.get(CONF_PLANT_UID, ""),
+        refresh_token=saved_refresh_token,
     )
+
+    # Persist refresh token whenever it changes
+    def _on_token_update(new_refresh_token: str) -> None:
+        if new_refresh_token != entry.data.get(CONF_REFRESH_TOKEN):
+            hass.config_entries.async_update_entry(
+                entry,
+                data={**entry.data, CONF_REFRESH_TOKEN: new_refresh_token},
+            )
+            _LOGGER.debug("Vimar: refresh token saved to config entry")
+
+    client.set_token_update_callback(_on_token_update)
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = client

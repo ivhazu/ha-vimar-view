@@ -79,14 +79,22 @@ def _random_client_token() -> str:
 class VimarCloudClient:
     """Vimar Cloud WebSocket client."""
 
-    def __init__(self, username: str, password: str, duid: str, plant_uid: str) -> None:
+    def __init__(
+        self,
+        username: str,
+        password: str,
+        duid: str,
+        plant_uid: str,
+        refresh_token: str | None = None,
+    ) -> None:
         self._username = username
         self._password = password
         self._duid = duid
         self._plant_uid = plant_uid
 
         self._access_token: str | None = None
-        self._refresh_token: str | None = None
+        # Pre-load saved refresh token to avoid full login on restart
+        self._refresh_token: str | None = refresh_token
         self._token_expires_at: float = 0
 
         self._session_token: str | None = None
@@ -98,21 +106,23 @@ class VimarCloudClient:
         self._msgid: int = 9
 
         self.device_states: dict[int, dict[str, Any]] = {}
-        # devices: keyed by "primary" idsf (Load idsf for actuators, idsf for others)
         self.devices: dict[int, dict] = {}
-        # mapping from measure_idsf -> load_idsf for paired actuators
         self.measure_to_load: dict[int, int] = {}
         self.idsf_energy_manager: int | None = None
 
-        # Gateway info (from attach response)
         self.plant_name: str = ""
         self.gateway_sw_version: str = ""
         self.gateway_mac: str = ""
 
         self._state_callbacks: list[Callable] = []
+        self._token_update_callback: Callable[[str], None] | None = None
         self._running = False
         self._keepalive_task: asyncio.Task | None = None
         self._discovery_callback: Callable | None = None
+
+    def set_token_update_callback(self, callback: Callable[[str], None]) -> None:
+        """Register callback fired whenever refresh token changes (to persist it)."""
+        self._token_update_callback = callback
 
     # ─── Token management ────────────────────────────────────────────────────
 
@@ -120,8 +130,11 @@ class VimarCloudClient:
         now = time.time()
         if self._access_token and now < self._token_expires_at - TOKEN_REFRESH_MARGIN:
             return self._access_token
-        if self._refresh_token and now < self._token_expires_at:
-            return await self._refresh_access_token()
+        if self._refresh_token:
+            try:
+                return await self._refresh_access_token()
+            except Exception:
+                _LOGGER.warning("Vimar: refresh token failed, doing full login")
         return await self._login()
 
     async def _login(self) -> str:
@@ -138,7 +151,7 @@ class VimarCloudClient:
                 "client_id": VIMAR_CLIENT_ID,
                 "redirect_uri": VIMAR_REDIRECT_URI,
                 "response_type": "code",
-                "scope": "openid",
+                "scope": "openid offline_access",
                 "code_challenge": code_challenge,
                 "code_challenge_method": "S256",
             }
@@ -210,21 +223,13 @@ class VimarCloudClient:
                     raise VimarAuthError(f"Token exchange failed ({resp.status}): {text}")
                 tokens = await resp.json()
 
-        self._access_token = tokens["access_token"]
-        self._refresh_token = tokens.get("refresh_token")
-        self._token_expires_at = time.time() + tokens.get("expires_in", 300)
-
-        try:
-            payload = tokens["access_token"].split(".")[1] + "=="
-            jwt_data = json.loads(base64.urlsafe_b64decode(payload))
-            self._user_uid = jwt_data.get("sub", "")
-        except Exception:
-            _LOGGER.warning("Vimar: could not extract useruid from JWT")
-
-        _LOGGER.info("Vimar: login OK")
-        return self._access_token
+        self._store_tokens(tokens)
+        _LOGGER.info("Vimar: full login OK, refresh_token obtained: %s",
+                     "yes" if self._refresh_token else "no")
+        return self._access_token  # type: ignore[return-value]
 
     async def _refresh_access_token(self) -> str:
+        """Use saved refresh token to get a new access token without full login."""
         async with aiohttp.ClientSession() as session:
             data = {
                 "client_id": VIMAR_CLIENT_ID,
@@ -233,22 +238,29 @@ class VimarCloudClient:
             }
             async with session.post(VIMAR_AUTH_URL, data=data) as resp:
                 if resp.status != 200:
-                    return await self._login()
+                    raise VimarAuthError(f"Refresh token failed ({resp.status})")
                 token_data = await resp.json()
 
-        self._access_token = token_data["access_token"]
-        self._refresh_token = token_data.get("refresh_token", self._refresh_token)
-        self._token_expires_at = time.time() + token_data.get("expires_in", 300)
-        return self._access_token
+        self._store_tokens(token_data)
+        _LOGGER.info("Vimar: token refreshed successfully")
+        return self._access_token  # type: ignore[return-value]
 
-    # ─── Static login (for config flow DUID discovery) ───────────────────────
+    def _store_tokens(self, tokens: dict) -> None:
+        """Store tokens and notify callback to persist refresh token."""
+        self._access_token = tokens["access_token"]
+        new_refresh = tokens.get("refresh_token")
+        if new_refresh:
+            self._refresh_token = new_refresh
+            if self._token_update_callback:
+                self._token_update_callback(new_refresh)
+        self._token_expires_at = time.time() + tokens.get("expires_in", 300)
 
-    async def login_and_get_duid(self) -> str | None:
-        """Login and return DUID from WebSocket attach. Used in config flow."""
-        await self._login()
-        # Connect briefly just to get DUID from attach response
-        # DUID is already known (passed in constructor), so just validate login
-        return self._duid
+        try:
+            payload = tokens["access_token"].split(".")[1] + "=="
+            jwt_data = json.loads(base64.urlsafe_b64decode(payload))
+            self._user_uid = jwt_data.get("sub", "")
+        except Exception:
+            _LOGGER.warning("Vimar: could not extract useruid from JWT")
 
     # ─── WebSocket messaging ─────────────────────────────────────────────────
 
@@ -342,7 +354,6 @@ class VimarCloudClient:
                 info = result[0]
                 self._session_token = info.get("token")
                 self.plant_name = info.get("plantname", "")
-                # Extract gateway hw info
                 srv = info.get("serverinfo", {})
                 self.gateway_sw_version = srv.get("softwareversion", "")
                 self.gateway_mac = srv.get("mac", "")
@@ -373,9 +384,8 @@ class VimarCloudClient:
             elif "idsf" in item:
                 sf_list.append(item)
 
-        # First pass: collect all idsf and their types
         load_idsfs: set[int] = set()
-        measure_idsfs: dict[int, int] = {}  # measure_idsf -> load_idsf
+        measure_idsfs: dict[int, int] = {}
 
         for sf in sf_list:
             idsf = sf.get("idsf")
@@ -385,7 +395,6 @@ class VimarCloudClient:
             if sstype == "SS_Energy_Load":
                 load_idsfs.add(idsf)
             elif sstype == "SS_Energy_Measure1P":
-                # Pair: measure = load + 8
                 load_idsf = idsf - IDSF_PAIR_OFFSET
                 measure_idsfs[idsf] = load_idsf
                 self.measure_to_load[idsf] = load_idsf
@@ -406,14 +415,11 @@ class VimarCloudClient:
                 if e.get("sfetype") and e.get("value") is not None
             }
 
-            # Skip Measure idsf — it gets merged into its paired Load device
             if sstype == "SS_Energy_Measure1P":
                 load_idsf = measure_idsfs.get(idsf)
                 if load_idsf and load_idsf in load_idsfs:
-                    # Store states under load_idsf
                     if initial_values:
                         self.device_states.setdefault(load_idsf, {}).update(initial_values)
-                    # Register measure idsf for updates but map to load device
                     reg_sfetypes = [s for s in sfetypes if s.startswith("SFE_State_")]
                     if reg_sfetypes:
                         idsf_to_register.append({"idsf": idsf, "sfetype": reg_sfetypes})
@@ -480,9 +486,7 @@ class VimarCloudClient:
             if idsf is None:
                 continue
 
-            # Remap measure idsf to load idsf
             target_idsf = self.measure_to_load.get(idsf, idsf)
-
             self.device_states.setdefault(target_idsf, {})
             for element in item.get("elements", []):
                 sfetype = element.get("sfetype")

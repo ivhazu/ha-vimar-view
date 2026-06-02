@@ -1,11 +1,11 @@
 {
   "domain": "vimar_cloud",
   "name": "Vimar View Cloud",
-  "version": "1.4.0",
-  "documentation": "https://github.com/andreabaronchelli/ha-vimar-view",
-  "issue_tracker": "https://github.com/andreabaronchelli/ha-vimar-view/issues",
+  "version": "1.5.0",
+  "documentation": "https://github.com/ivhazu/ha-vimar-view",
+  "issue_tracker": "https://github.com/ivhazu/ha-vimar-view/issues",
   "dependencies": [],
-  "codeowners": ["@andreabaronchelli"],
+  "codeowners": ["@ivhazu"],
   "requirements": [],
   "iot_class": "cloud_push",
   "config_flow": true

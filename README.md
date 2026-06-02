@@ -3,7 +3,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/Home%20Assistant-2024.1%2B-blue.svg)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.4.0-brightgreen.svg)](https://github.com/andreabaronchelli/ha-vimar-view/releases)
+[![Version](https://img.shields.io/badge/version-1.4.0-brightgreen.svg)](https://github.com/ivhazu/ha-vimar-view/releases)
 
 > 🇮🇹 [Italiano](#italiano) | 🇬🇧 [English](#english)
 
@@ -78,13 +78,13 @@ Utilizza il protocollo WebSocket proprietario Vimar (`prod.vimar.cloud`) con aut
 
 1. Apri HACS in Home Assistant
 2. Vai su **Integrazioni** → menu `⋮` → **Repository personalizzati**
-3. Aggiungi: `https://github.com/andreabaronchelli/ha-vimar-view`
+3. Aggiungi: `https://github.com/ivhazu/ha-vimar-view`
 4. Cerca "Vimar View Cloud" e installa
 5. Riavvia Home Assistant
 
 #### Installazione manuale
 
-1. Scarica l'ultima release da [Releases](https://github.com/andreabaronchelli/ha-vimar-view/releases)
+1. Scarica l'ultima release da [Releases](https://github.com/ivhazu/ha-vimar-view/releases)
 2. Copia la cartella `vimar_cloud` in `/config/custom_components/`
 3. Riavvia Home Assistant
 
@@ -150,7 +150,7 @@ La connessione è **cloud_push**: gli aggiornamenti di stato arrivano in tempo r
 
 ### Contribuire
 
-Pull request benvenute! Per bug o richieste di funzioni usa le [Issues](https://github.com/andreabaronchelli/ha-vimar-view/issues).
+Pull request benvenute! Per bug o richieste di funzioni usa le [Issues](https://github.com/ivhazu/ha-vimar-view/issues).
 
 ---
 
@@ -223,13 +223,13 @@ Uses Vimar's proprietary WebSocket protocol (`prod.vimar.cloud`) with OAuth2 PKC
 
 1. Open HACS in Home Assistant
 2. Go to **Integrations** → `⋮` menu → **Custom repositories**
-3. Add: `https://github.com/andreabaronchelli/ha-vimar-view`
+3. Add: `https://github.com/ivhazu/ha-vimar-view`
 4. Search "Vimar View Cloud" and install
 5. Restart Home Assistant
 
 #### Manual installation
 
-1. Download the latest release from [Releases](https://github.com/andreabaronchelli/ha-vimar-view/releases)
+1. Download the latest release from [Releases](https://github.com/ivhazu/ha-vimar-view/releases)
 2. Copy the `vimar_cloud` folder to `/config/custom_components/`
 3. Restart Home Assistant
 
@@ -295,7 +295,7 @@ The connection is **cloud_push**: state updates arrive in real-time via `changes
 
 ### Contributing
 
-Pull requests are welcome! For bugs or feature requests, use [Issues](https://github.com/andreabaronchelli/ha-vimar-view/issues).
+Pull requests are welcome! For bugs or feature requests, use [Issues](https://github.com/ivhazu/ha-vimar-view/issues).
 
 ---
 
