@@ -21,6 +21,22 @@ CONF_PLANT_NAME = "plant_name"
 TOKEN_REFRESH_MARGIN = 60
 KEEPALIVE_INTERVAL = 25
 
+# SFE types — shutters
+SFE_STATE_SHUTTER = "SFE_State_Shutter"
+SFE_CMD_SHUTTER = "SFE_Cmd_Shutter"
+
+# Shutter command values
+SHUTTER_CMD_OPEN = "0"
+SHUTTER_CMD_CLOSE = "100"
+SHUTTER_CMD_STOP = "Stop"
+
+# SFE types — scenes
+SFE_CMD_EXECUTE = "SFE_Cmd_Execute"
+SFE_CMD_DOWN_KEY = "SFE_Cmd_DownKey_ActiveScene"
+SFE_STATE_EXECUTED = "SFE_State_Executed"
+SFE_STATE_LOCKED = "SFE_State_Locked"
+SFE_STATE_SF_LIST = "SFE_State_SFList"
+
 # SFE types — lights
 SFE_STATE_ONOFF = "SFE_State_OnOff"
 SFE_STATE_BRIGHTNESS = "SFE_State_Brightness"
@@ -69,8 +85,11 @@ SSTYPE_LABELS = {
     "SS_Energy_Load": "Attuatore di carico (14593)",
     "SS_Energy_Measure1P": "Attuatore di carico (14593)",
     "SS_Energy_LoadControl1P": "Energy Meter (02963)",
+    "SS_Shutter_Position": "Roller Shutter (30804)",
+    "SS_SceneActivator_Activator": "Scene Activator",
+    "SS_Scene_Executor": "Scene",
 }
 
 # Gateway model label
-GATEWAY_MODEL = "Gateway IoT (14597)"
+GATEWAY_MODEL = "Gateway IoT"
 ENERGY_MANAGER_MODEL = "Energy Meter (02963)"

@@ -29,8 +29,11 @@ from .const import (
     SF_CATEGORY_BIGDATA,
     SF_CATEGORY_PLANT,
     SFE_CMD_BRIGHTNESS,
+    SFE_CMD_DOWN_KEY,
+    SFE_CMD_EXECUTE,
     SFE_CMD_LOAD,
     SFE_CMD_ONOFF,
+    SFE_CMD_SHUTTER,
     SFE_STATE_BRIGHTNESS,
     SFE_STATE_GLOBAL_ACTIVE_POWER,
     SFE_STATE_GLOBAL_THRESHOLD,
@@ -38,6 +41,10 @@ from .const import (
     SFE_STATE_LOAD_ID,
     SFE_STATE_LOADS_PRIORITY,
     SFE_STATE_ONOFF,
+    SFE_STATE_SHUTTER,
+    SHUTTER_CMD_CLOSE,
+    SHUTTER_CMD_OPEN,
+    SHUTTER_CMD_STOP,
     TOKEN_REFRESH_MARGIN,
     VIMAR_AUTH_URL,
     VIMAR_CLIENT_ID,
@@ -467,6 +474,14 @@ class VimarCloudClient:
             return "energy_manager"
         if sstype == "SS_Energy_Load":
             return "load_control"
+        if sstype == "SS_Shutter_Position":
+            return "shutter"
+        if sstype == "SS_SceneActivator_Activator":
+            return "scene_activator"
+        if sstype == "SS_Scene_Executor":
+            return "scene"
+        if SFE_STATE_SHUTTER in sfetypes:
+            return "shutter"
         if SFE_STATE_BRIGHTNESS in sfetypes and SFE_STATE_ONOFF in sfetypes:
             return "dimmer"
         if SFE_STATE_ONOFF in sfetypes:
@@ -531,6 +546,22 @@ class VimarCloudClient:
         for idsf, device in self.devices.items():
             if device.get("device_type") == "load_control":
                 await self.restore_load(idsf)
+
+    async def open_cover(self, idsf: int) -> None:
+        await self._send_request(FUNC_DOACTION, [{"idsf": idsf, "sfetype": SFE_CMD_SHUTTER, "value": SHUTTER_CMD_OPEN}])
+
+    async def close_cover(self, idsf: int) -> None:
+        await self._send_request(FUNC_DOACTION, [{"idsf": idsf, "sfetype": SFE_CMD_SHUTTER, "value": SHUTTER_CMD_CLOSE}])
+
+    async def stop_cover(self, idsf: int) -> None:
+        await self._send_request(FUNC_DOACTION, [{"idsf": idsf, "sfetype": SFE_CMD_SHUTTER, "value": SHUTTER_CMD_STOP}])
+
+    async def set_cover_position(self, idsf: int, vimar_pos: int) -> None:
+        """Set cover position. vimar_pos: 0=open, 100=closed."""
+        await self._send_request(FUNC_DOACTION, [{"idsf": idsf, "sfetype": SFE_CMD_SHUTTER, "value": str(vimar_pos)}])
+
+    async def execute_scene_activator(self, idsf: int) -> None:
+        await self._send_request(FUNC_DOACTION, [{"idsf": idsf, "sfetype": SFE_CMD_DOWN_KEY, "value": "Execute"}])
 
     # ─── Connection lifecycle ─────────────────────────────────────────────────
 

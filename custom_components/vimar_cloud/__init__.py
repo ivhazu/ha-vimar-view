@@ -15,7 +15,7 @@ from .device_info import gateway_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.LIGHT, Platform.SENSOR, Platform.SELECT, Platform.BUTTON, Platform.NUMBER]
+PLATFORMS = [Platform.LIGHT, Platform.SENSOR, Platform.SELECT, Platform.BUTTON, Platform.NUMBER, Platform.COVER]
 
 CONF_REFRESH_TOKEN = "refresh_token"
 

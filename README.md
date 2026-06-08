@@ -3,7 +3,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/Home%20Assistant-2024.1%2B-blue.svg)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.5.2-brightgreen.svg)](https://github.com/ivhazu/ha-vimar-view/releases)
+[![Version](https://img.shields.io/badge/version-1.6.0-brightgreen.svg)](https://github.com/ivhazu/ha-vimar-view/releases)
 
 > 🇮🇹 [Italiano](#italiano) | 🇬🇧 [English](#english)
 
@@ -26,11 +26,13 @@ Utilizza il protocollo WebSocket proprietario Vimar (`prod.vimar.cloud`) con aut
 | Dispositivo | Codice Vimar | Tipo HA | Funzioni |
 |---|---|---|---|
 | Gateway IoT | **14597** | — | Dispositivo radice, firmware, MAC |
+| Gateway IoT | **30807** | — | Dispositivo radice, firmware, MAC |
 | Deviatore connesso | **14592** | `light` | On/Off |
 | Modulo relè | **03981** | `light` | On/Off |
 | Dimmer connesso | **14595** | `light` | On/Off, Luminosità |
 | Attuatore di carico | **14593** | `sensor` + `select` + `button` | Potenza W, kWh, Stato, Modalità, Ripristina |
 | Energy Meter | **02963** | `sensor` + `number` | Consumo totale W/kWh, Soglia alert/distacco |
+| Tapparella connessa | **30804** | `cover` | Apri, Chiudi, Stop, Posizione % |
 
 ---
 
@@ -41,7 +43,7 @@ Utilizza il protocollo WebSocket proprietario Vimar (`prod.vimar.cloud`) con aut
 |---|---|---|
 | `light.<nome>` | Light | Controllo on/off e dimmer |
 
-#### Per ogni attuatore di carico (14593)
+#### Per ogni attuatore di carico
 | Entità | Tipo | Descrizione |
 |---|---|---|
 | `sensor.<nome>_potenza` | Sensor (W) | Potenza istantanea |
@@ -50,7 +52,17 @@ Utilizza il protocollo WebSocket proprietario Vimar (`prod.vimar.cloud`) con aut
 | `select.<nome>_modalita` | Select | Controllo modalità: Auto / Forced on / Forced off |
 | `button.<nome>_ripristina` | Button | Ripristina il carico in modalità Auto |
 
-#### Per l'Energy Manager (02963)
+#### Per ogni tapparella
+| Entità | Tipo | Descrizione |
+|---|---|---|
+| `cover.<nome>` | Cover | Apri, Chiudi, Stop, Posizione % (0=chiusa, 100=aperta) |
+
+#### Per ogni Scene Activator
+| Entità | Tipo | Descrizione |
+|---|---|---|
+| `button.<nome>` | Button | Attiva la scena Vimar associata |
+
+#### Per l'Energy Manager
 | Entità | Tipo | Descrizione |
 |---|---|---|
 | `sensor.consumo_totale` | Sensor (W) | Potenza totale istantanea |
@@ -67,7 +79,7 @@ Utilizza il protocollo WebSocket proprietario Vimar (`prod.vimar.cloud`) con aut
 
 - Home Assistant **2024.1.0** o superiore
 - Account **MyVimar** attivo
-- Gateway **Vimar 14597** connesso e raggiungibile
+- Sistema domotico **Vimar View Wireless** connesso e raggiungibile
 - Piano **gratuito** MyVimar (sufficiente per tutte le funzioni implementate)
 
 ---
@@ -103,13 +115,13 @@ Utilizza il protocollo WebSocket proprietario Vimar (`prod.vimar.cloud`) con aut
 
 ### Come trovare il DUID del gateway
 
-Il DUID è l'identificatore univoco del tuo gateway Vimar 14597. Puoi trovarlo in due modi:
+Il DUID è l'identificatore univoco del tuo gateway Vimar. Puoi trovarlo in due modi:
 
 #### Metodo 1 — App Vimar View
 1. Apri l'app **Vimar View** sul telefono
-2. Vai in **Impostazioni** (icona ⚙️ in alto a destra)
-3. Tocca **Info gateway**
-4. Il DUID è mostrato nel formato `000000AAA00000`
+2. Vai in **Impostazioni** (icona ⚙️ in basso a destra)
+3. Vai in **Info di sistema**
+4. Il DUID è mostrato come **BLEG** nel formato `000000AAA00000`
 
 #### Metodo 2 — Da mitmproxy (avanzato)
 Se non riesci a trovarlo nell'app, puoi catturarlo intercettando il traffico dell'app con mitmproxy. Il DUID appare nell'URL della connessione WebSocket:
@@ -144,7 +156,7 @@ La connessione è **cloud_push**: gli aggiornamenti di stato arrivano in tempo r
 - Le **automazioni** (Routine) dell'app View non sono ancora supportate
 - I **dati storici** (kWh giornalieri/mensili) richiedono un piano MyVimar a pagamento e non sono disponibili con il piano gratuito
 - Il **DUID** deve essere inserito manualmente (auto-discovery in sviluppo)
-- Testato su gateway **14597** con firmware `r586`
+- Questa integrazione è stata sviluppata con il supporto di **[Claude](https://claude.ai)**, l'assistente AI di Anthropic
 
 ---
 
@@ -171,11 +183,13 @@ Uses Vimar's proprietary WebSocket protocol (`prod.vimar.cloud`) with OAuth2 PKC
 | Device | Vimar Code | HA Type | Features |
 |---|---|---|---|
 | IoT Gateway | **14597** | — | Root device, firmware, MAC |
+| IoT Gateway | **30807** | — | Root device, firmware, MAC |
 | Connected switch | **14592** | `light` | On/Off |
 | Relay module | **03981** | `light` | On/Off |
 | Connected dimmer | **14595** | `light` | On/Off, Brightness |
 | Load actuator | **14593** | `sensor` + `select` + `button` | Power W, kWh, State, Mode, Restore |
 | Energy Meter | **02963** | `sensor` + `number` | Total power W/kWh, Alert/disconnect thresholds |
+| Connected shutter | **30804** | `cover` | Open, Close, Stop, Position % |
 
 ---
 
@@ -186,7 +200,7 @@ Uses Vimar's proprietary WebSocket protocol (`prod.vimar.cloud`) with OAuth2 PKC
 |---|---|---|
 | `light.<name>` | Light | On/off and brightness control |
 
-#### For each load actuator (14593)
+#### For each load actuator
 | Entity | Type | Description |
 |---|---|---|
 | `sensor.<name>_power` | Sensor (W) | Instantaneous power |
@@ -195,7 +209,17 @@ Uses Vimar's proprietary WebSocket protocol (`prod.vimar.cloud`) with OAuth2 PKC
 | `select.<name>_mode` | Select | Mode control: Auto / Forced on / Forced off |
 | `button.<name>_restore` | Button | Restore load to Auto mode |
 
-#### For the Energy Manager (02963)
+#### For each shutter
+| Entity | Type | Description |
+|---|---|---|
+| `cover.<name>` | Cover | Open, Close, Stop, Position % (0=closed, 100=open) |
+
+#### For each Scene Activator
+| Entity | Type | Description |
+|---|---|---|
+| `button.<name>` | Button | Triggers the associated Vimar scene |
+
+#### For the Energy Manager
 | Entity | Type | Description |
 |---|---|---|
 | `sensor.total_consumption` | Sensor (W) | Total instantaneous power |
@@ -212,7 +236,7 @@ Uses Vimar's proprietary WebSocket protocol (`prod.vimar.cloud`) with OAuth2 PKC
 
 - Home Assistant **2024.1.0** or higher
 - Active **MyVimar** account
-- **Vimar 14597** gateway connected and reachable
+- **Vimar View Wireless** smart home devices connected and reachable
 - **Free** MyVimar plan (sufficient for all implemented features)
 
 ---
@@ -248,13 +272,13 @@ Uses Vimar's proprietary WebSocket protocol (`prod.vimar.cloud`) with OAuth2 PKC
 
 ### How to find the gateway DUID
 
-The DUID is the unique identifier of your Vimar 14597 gateway. You can find it in two ways:
+The DUID is the unique identifier of your Vimar gateway. You can find it in two ways:
 
 #### Method 1 — Vimar View App
 1. Open the **Vimar View** app on your phone
-2. Go to **Settings** (⚙️ icon top right)
-3. Tap **Gateway info**
-4. The DUID is shown in format `000000AAA00000`
+2. Go to **Settings** (⚙️ icon bottom right)
+3. Go to **System info**
+4. The DUID is shown as **BLEG** in format `000000AAA00000`
 
 #### Method 2 — Via mitmproxy (advanced)
 If you can't find it in the app, you can capture it by intercepting the app's traffic with mitmproxy. The DUID appears in the WebSocket connection URL:
@@ -289,7 +313,7 @@ The connection is **cloud_push**: state updates arrive in real-time via `changes
 - App **Routines** (automations) are not yet supported
 - **Historical data** (daily/monthly kWh) requires a paid MyVimar plan
 - **DUID** must be entered manually (auto-discovery in development)
-- Tested on **14597** gateway with firmware `r586`
+- This integration was developed with the support of **[Claude](https://claude.ai)**, Anthropic's AI assistant
 
 ---
 
