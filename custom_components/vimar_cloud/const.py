@@ -80,16 +80,16 @@ SF_CATEGORY_BIGDATA = "BigData"
 
 # sstype → model label (shown in HA device info)
 SSTYPE_LABELS = {
-    "SS_Light_Switch": "Switch (14592 / 03981)",
-    "SS_Light_Dimmer": "Dimmer (14595)",
-    "SS_Energy_Load": "Attuatore di carico (14593)",
-    "SS_Energy_Measure1P": "Attuatore di carico (14593)",
-    "SS_Energy_LoadControl1P": "Energy Meter (02963)",
-    "SS_Shutter_Position": "Roller Shutter (30804)",
+    "SS_Light_Switch": "Switch",
+    "SS_Light_Dimmer": "Dimmer",
+    "SS_Energy_Load": "Actuator",
+    "SS_Energy_Measure1P": "Actuator",
+    "SS_Energy_LoadControl1P": "Energy Meter",
+    "SS_Shutter_Position": "Cover",
     "SS_SceneActivator_Activator": "Scene Activator",
     "SS_Scene_Executor": "Scene",
 }
 
 # Gateway model label
 GATEWAY_MODEL = "Gateway IoT"
-ENERGY_MANAGER_MODEL = "Energy Meter (02963)"
+ENERGY_MANAGER_MODEL = "Energy Meter"

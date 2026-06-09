@@ -57,10 +57,10 @@ Utilizza il protocollo WebSocket proprietario Vimar (`prod.vimar.cloud`) con aut
 |---|---|---|
 | `cover.<nome>` | Cover | Apri, Chiudi, Stop, Posizione % (0=chiusa, 100=aperta) |
 
-#### Per ogni Scene Activator
+#### Per ogni Scenario
 | Entità | Tipo | Descrizione |
 |---|---|---|
-| `button.<nome>` | Button | Attiva la scena Vimar associata |
+| `button.<nome>` | Button | Attiva lo scenario Vimar associato |
 
 #### Per l'Energy Manager
 | Entità | Tipo | Descrizione |

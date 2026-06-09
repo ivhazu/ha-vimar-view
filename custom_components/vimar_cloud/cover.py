@@ -54,6 +54,7 @@ class VimarCover(CoverEntity):
         self._client = client
         self._idsf = idsf
         self._last_cmd: str = ""
+        self._last_known_position: int | None = None  # ultima posizione nota
         self._attr_name = device["name"]
         self._attr_unique_id = f"{DOMAIN}_{idsf}_cover"
         self._attr_device_info = device_info_for_idsf(client, idsf, entry)
@@ -64,6 +65,13 @@ class VimarCover(CoverEntity):
     @callback
     def _on_update(self, updated: list[int]) -> None:
         if self._idsf in updated:
+            # Aggiorna l'ultima posizione nota se il valore è numerico
+            raw = self._raw_value()
+            if raw is not None and not str(raw).startswith("Change to"):
+                try:
+                    self._last_known_position = 100 - int(raw)
+                except (ValueError, TypeError):
+                    pass
             self.async_write_ha_state()
 
     def _raw_value(self) -> str | None:
@@ -74,18 +82,20 @@ class VimarCover(CoverEntity):
         """Return position 0-100 where 100 = fully open.
 
         Vimar: 0 = open, 100 = closed — inverted vs HA convention.
-        'Change to X' values are ignored (cover is moving).
+        During movement ('Change to X') restituisce l'ultima posizione nota.
         """
         value = self._raw_value()
         if value is None:
-            return None
+            return self._last_known_position
         if isinstance(value, str) and value.startswith("Change to"):
-            return None  # moving, position unknown
+            return self._last_known_position  # in movimento, ultima nota
         try:
             vimar_pos = int(value)
-            return 100 - vimar_pos  # convert to HA convention
+            ha_pos = 100 - vimar_pos
+            self._last_known_position = ha_pos
+            return ha_pos
         except (ValueError, TypeError):
-            return None
+            return self._last_known_position
 
     @property
     def is_closed(self) -> bool | None:
