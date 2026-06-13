@@ -26,8 +26,8 @@ async def async_setup_entry(
     for idsf, device in client.devices.items():
         if device.get("device_type") == "load_control":
             entities.append(VimarRestoreLoadButton(client, idsf, entry))
-        elif device.get("device_type") == "scene_activator":
-            entities.append(VimarSceneActivatorButton(client, idsf, device, entry))
+        elif device.get("device_type") == "scene":
+            entities.append(VimarSceneButton(client, idsf, device, entry))
 
     if client.idsf_energy_manager is not None:
         entities.append(VimarRestoreAllLoadsButton(client, entry))
@@ -64,7 +64,7 @@ class VimarRestoreAllLoadsButton(ButtonEntity):
         await self._client.restore_all_loads()
 
 
-class VimarSceneActivatorButton(ButtonEntity):
+class VimarSceneButton(ButtonEntity):
     _attr_has_entity_name = True
     _attr_icon = "mdi:play-circle-outline"
 
@@ -78,8 +78,8 @@ class VimarSceneActivatorButton(ButtonEntity):
         self._client = client
         self._idsf = idsf
         self._attr_name = device["name"]
-        self._attr_unique_id = f"{DOMAIN}_{idsf}_scene_activator"
+        self._attr_unique_id = f"{DOMAIN}_{idsf}_scene"
         self._attr_device_info = device_info_for_idsf(client, idsf, entry)
 
     async def async_press(self) -> None:
-        await self._client.execute_scene_activator(self._idsf)
+        await self._client.execute_scene(self._idsf)

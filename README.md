@@ -62,6 +62,8 @@ Utilizza il protocollo WebSocket proprietario Vimar (`prod.vimar.cloud`) con aut
 |---|---|---|
 | `button.<nome>` | Button | Attiva lo scenario Vimar associato |
 
+> ⚠️ **Nota**: gli scenari sono ancora **in fase di test** — se il pulsante non sembra avere effetto, apri una [Issue](https://github.com/ivhazu/ha-vimar-view/issues) con i dettagli (vedi [CONTRIBUTING](CONTRIBUTING.md)).
+
 #### Per l'Energy Manager
 | Entità | Tipo | Descrizione |
 |---|---|---|
@@ -218,6 +220,8 @@ Uses Vimar's proprietary WebSocket protocol (`prod.vimar.cloud`) with OAuth2 PKC
 | Entity | Type | Description |
 |---|---|---|
 | `button.<name>` | Button | Triggers the associated Vimar scene |
+
+> ⚠️ **Note**: scenes are still **being tested** — if the button seems to have no effect, open an [Issue](https://github.com/ivhazu/ha-vimar-view/issues) with details (see [CONTRIBUTING](CONTRIBUTING.md)).
 
 #### For the Energy Manager
 | Entity | Type | Description |

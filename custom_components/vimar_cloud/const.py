@@ -86,7 +86,6 @@ SSTYPE_LABELS = {
     "SS_Energy_Measure1P": "Actuator",
     "SS_Energy_LoadControl1P": "Energy Meter",
     "SS_Shutter_Position": "Cover",
-    "SS_SceneActivator_Activator": "Scene Activator",
     "SS_Scene_Executor": "Scene",
 }
 

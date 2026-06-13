@@ -29,7 +29,6 @@ from .const import (
     SF_CATEGORY_BIGDATA,
     SF_CATEGORY_PLANT,
     SFE_CMD_BRIGHTNESS,
-    SFE_CMD_DOWN_KEY,
     SFE_CMD_EXECUTE,
     SFE_CMD_LOAD,
     SFE_CMD_ONOFF,
@@ -477,7 +476,7 @@ class VimarCloudClient:
         if sstype == "SS_Shutter_Position":
             return "shutter"
         if sstype == "SS_SceneActivator_Activator":
-            return "scene_activator"
+            return "scene_activator_unused"  # non esposto come entità
         if sstype == "SS_Scene_Executor":
             return "scene"
         if SFE_STATE_SHUTTER in sfetypes:
@@ -560,8 +559,8 @@ class VimarCloudClient:
         """Set cover position. vimar_pos: 0=open, 100=closed."""
         await self._send_request(FUNC_DOACTION, [{"idsf": idsf, "sfetype": SFE_CMD_SHUTTER, "value": str(vimar_pos)}])
 
-    async def execute_scene_activator(self, idsf: int) -> None:
-        await self._send_request(FUNC_DOACTION, [{"idsf": idsf, "sfetype": SFE_CMD_DOWN_KEY, "value": "Execute"}])
+    async def execute_scene(self, idsf: int) -> None:
+        await self._send_request(FUNC_DOACTION, [{"idsf": idsf, "sfetype": SFE_CMD_EXECUTE, "value": "Execute"}])
 
     # ─── Connection lifecycle ─────────────────────────────────────────────────
 
