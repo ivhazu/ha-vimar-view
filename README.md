@@ -33,6 +33,7 @@ Utilizza il protocollo WebSocket proprietario Vimar (`prod.vimar.cloud`) con aut
 | Attuatore di carico | **14593** | `sensor` + `select` + `button` | Potenza W, kWh, Stato, Modalità, Ripristina |
 | Energy Meter | **02963** | `sensor` + `number` | Consumo totale W/kWh, Soglia alert/distacco |
 | Tapparella connessa | **30804** | `cover` | Apri, Chiudi, Stop, Posizione % |
+| Termostato zona clima | **02912** | `climate` + `number` | On/Off, Riscaldamento/Raffreddamento, Temperatura, Preset, Setpoint avanzati |
 
 ---
 
@@ -56,6 +57,27 @@ Utilizza il protocollo WebSocket proprietario Vimar (`prod.vimar.cloud`) con aut
 | Entità | Tipo | Descrizione |
 |---|---|---|
 | `cover.<nome>` | Cover | Apri, Chiudi, Stop, Posizione % (0=chiusa, 100=aperta) |
+
+#### Per ogni termostato (zona clima)
+| Entità | Tipo | Descrizione |
+|---|---|---|
+| `climate.<nome>` | Climate | On/Off, modalità Riscaldamento / Raffreddamento, temperatura target, preset |
+| `number.<nome>_riscaldamento_riduzione` | Number (°C) | Setpoint riduzione notturna riscaldamento (5–25°C) |
+| `number.<nome>_riscaldamento_assenza` | Number (°C) | Setpoint temperatura assenza riscaldamento (5–20°C) |
+| `number.<nome>_riscaldamento_protezione_antigelo` | Number (°C) | Soglia protezione antigelo (3–10°C) |
+| `number.<nome>_raffreddamento_riduzione` | Number (°C) | Setpoint riduzione notturna raffreddamento (20–35°C) |
+| `number.<nome>_raffreddamento_assenza` | Number (°C) | Setpoint temperatura assenza raffreddamento (25–35°C) |
+
+**Modalità HVAC disponibili:**
+- 🔴 **Off** — termostato spento
+- 🔥 **Riscaldamento** — modalità invernale attiva
+- ❄️ **Raffreddamento** — modalità estiva attiva
+
+**Preset disponibili:**
+- **Programma** — segue il programma settimanale impostato sull'app Vimar
+- **Manuale** — override manuale temporaneo della temperatura
+
+> ℹ️ **Nota**: la modifica dei programmi orari settimanali non è supportata direttamente in HA (usare l'app Vimar). Il preset *Manuale* permette comunque di sovrascrivere temporaneamente la temperatura target.
 
 #### Per ogni Scenario
 | Entità | Tipo | Descrizione |
@@ -192,6 +214,7 @@ Uses Vimar's proprietary WebSocket protocol (`prod.vimar.cloud`) with OAuth2 PKC
 | Load actuator | **14593** | `sensor` + `select` + `button` | Power W, kWh, State, Mode, Restore |
 | Energy Meter | **02963** | `sensor` + `number` | Total power W/kWh, Alert/disconnect thresholds |
 | Connected shutter | **30804** | `cover` | Open, Close, Stop, Position % |
+| Climate zone thermostat | **02912** | `climate` + `number` | On/Off, Heat/Cool, Temperature, Presets, Advanced setpoints |
 
 ---
 
@@ -215,6 +238,27 @@ Uses Vimar's proprietary WebSocket protocol (`prod.vimar.cloud`) with OAuth2 PKC
 | Entity | Type | Description |
 |---|---|---|
 | `cover.<name>` | Cover | Open, Close, Stop, Position % (0=closed, 100=open) |
+
+#### For each thermostat (climate zone)
+| Entity | Type | Description |
+|---|---|---|
+| `climate.<name>` | Climate | On/Off, Heat / Cool mode, target temperature, preset |
+| `number.<name>_heat_reduction` | Number (°C) | Heating night-reduction setpoint (5–25°C) |
+| `number.<name>_heat_absence` | Number (°C) | Heating away setpoint (5–20°C) |
+| `number.<name>_heat_protection` | Number (°C) | Frost protection threshold (3–10°C) |
+| `number.<name>_cool_reduction` | Number (°C) | Cooling night-reduction setpoint (20–35°C) |
+| `number.<name>_cool_absence` | Number (°C) | Cooling away setpoint (25–35°C) |
+
+**Available HVAC modes:**
+- 🔴 **Off** — thermostat off
+- 🔥 **Heat** — winter / heating mode active
+- ❄️ **Cool** — summer / cooling mode active
+
+**Available presets:**
+- **Programma** — follows the weekly schedule set in the Vimar app
+- **Manuale** — temporary manual temperature override
+
+> ℹ️ **Note**: editing weekly schedules is not supported directly in HA (use the Vimar app). The *Manuale* preset allows a temporary override of the target temperature at any time.
 
 #### For each Scene Activator
 | Entity | Type | Description |

@@ -15,7 +15,8 @@ from .device_info import gateway_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.LIGHT, Platform.SENSOR, Platform.SELECT, Platform.BUTTON, Platform.NUMBER, Platform.COVER]
+PLATFORMS = [Platform.CLIMATE, Platform.LIGHT, Platform.SENSOR,
+             Platform.SELECT, Platform.BUTTON, Platform.NUMBER, Platform.COVER]
 
 CONF_REFRESH_TOKEN = "refresh_token"
 
@@ -51,11 +52,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     discovery_done = asyncio.Event()
     client.set_discovery_callback(lambda: discovery_done.set())
 
-    entry.async_create_background_task(hass, client.connect(), "vimar_cloud_connection")
+    entry.async_create_background_task(
+        hass, client.connect(), "vimar_cloud_connection")
 
     try:
         await asyncio.wait_for(discovery_done.wait(), timeout=30)
-        _LOGGER.info("Vimar: discovery complete, %d devices found", len(client.devices))
+        _LOGGER.info("Vimar: discovery complete, %d devices found",
+                     len(client.devices))
     except asyncio.TimeoutError:
         _LOGGER.warning("Vimar: discovery timeout after 30s")
 
