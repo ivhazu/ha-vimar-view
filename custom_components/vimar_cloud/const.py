@@ -78,6 +78,44 @@ FUNC_KEEPALIVE = "keepalive"
 SF_CATEGORY_PLANT = "Plant"
 SF_CATEGORY_BIGDATA = "BigData"
 
+# SFE types — climate / thermostat
+SFE_STATE_AMBIENT_TEMPERATURE = "SFE_State_AmbientTemperature"
+SFE_STATE_AMBIENT_SETPOINT = "SFE_State_AmbientSetpoint"
+SFE_STATE_HVAC_MODE = "SFE_State_HVACMode"
+SFE_STATE_CHANGE_OVER_MODE = "SFE_State_ChangeOverMode"
+SFE_STATE_OUT_STATUS = "SFE_State_OutStatus"
+SFE_CMD_HVAC_MODE = "SFE_Cmd_HVACMode"
+SFE_CMD_AMBIENT_SETPOINT = "SFE_Cmd_AmbientSetpoint"
+SFE_CMD_CHANGE_OVER_MODE = "SFE_Cmd_ChangeOverMode"
+
+# Thermostat advanced setpoints — states
+SFE_STATE_HEAT_REDUCTION_SETPOINT = "SFE_State_HeatReductionSetpoint"
+SFE_STATE_HEAT_PROTECTION_SETPOINT = "SFE_State_HeatProtectionSetpoint"
+SFE_STATE_HEAT_ABSENCE_SETPOINT = "SFE_State_HeatAbsenceSetpoint"
+SFE_STATE_COOL_REDUCTION_SETPOINT = "SFE_State_CoolReductionSetpoint"
+SFE_STATE_COOL_ABSENCE_SETPOINT = "SFE_State_CoolAbsenceSetpoint"
+
+# Thermostat advanced setpoints — commands
+SFE_CMD_HEAT_REDUCTION_SETPOINT = "SFE_Cmd_HeatReductionSetpoint"
+SFE_CMD_HEAT_PROTECTION_SETPOINT = "SFE_Cmd_HeatProtectionSetpoint"
+SFE_CMD_HEAT_ABSENCE_SETPOINT = "SFE_Cmd_HeatAbsenceSetpoint"
+SFE_CMD_COOL_REDUCTION_SETPOINT = "SFE_Cmd_CoolReductionSetpoint"
+SFE_CMD_COOL_ABSENCE_SETPOINT = "SFE_Cmd_CoolAbsenceSetpoint"
+
+# HVAC mode values (Vimar)
+HVAC_MODE_VIMAR_OFF = "Off"
+HVAC_MODE_VIMAR_AUTO = "Auto"
+HVAC_MODE_VIMAR_TIMED_MANUAL = "Timed manual"
+
+# Change-over mode values (Vimar)
+CHANGE_OVER_HEATING = "Heating"
+CHANGE_OVER_COOLING = "Cooling"
+
+# Out-status values (Vimar)
+OUT_STATUS_OFF = "Off"
+OUT_STATUS_HEAT = "Heat"
+OUT_STATUS_COOL = "Cool"
+
 # sstype → model label (shown in HA device info)
 SSTYPE_LABELS = {
     "SS_Light_Switch": "Switch",
@@ -87,6 +125,7 @@ SSTYPE_LABELS = {
     "SS_Energy_LoadControl1P": "Energy Meter",
     "SS_Shutter_Position": "Cover",
     "SS_Scene_Executor": "Scene",
+    "SS_Clima_Zone": "Thermostat",
 }
 
 # Gateway model label
