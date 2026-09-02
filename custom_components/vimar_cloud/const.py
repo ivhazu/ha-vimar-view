@@ -126,6 +126,7 @@ SSTYPE_LABELS = {
     "SS_Shutter_Position": "Cover",
     "SS_Scene_Executor": "Scene",
     "SS_Clima_Zone": "Thermostat",
+    "SS_Automation_OnOff": "Automation Switch",
 }
 
 # Gateway model label

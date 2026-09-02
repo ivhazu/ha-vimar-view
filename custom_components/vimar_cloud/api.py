@@ -513,6 +513,8 @@ class VimarCloudClient:
             return "load_control"
         if sstype == "SS_Shutter_Position":
             return "shutter"
+        if sstype == "SS_Automation_OnOff":
+            return "automation_switch"
         if sstype == "SS_SceneActivator_Activator":
             return "scene_activator_unused"  # non esposto come entità
         if sstype == "SS_Scene_Executor":
@@ -599,6 +601,12 @@ class VimarCloudClient:
 
     async def execute_scene(self, idsf: int) -> None:
         await self._send_request(FUNC_DOACTION, [{"idsf": idsf, "sfetype": SFE_CMD_EXECUTE, "value": "Execute"}])
+
+    async def turn_on_automation(self, idsf: int) -> None:
+        await self._send_request(FUNC_DOACTION, [{"idsf": idsf, "sfetype": SFE_CMD_ONOFF, "value": "On"}])
+
+    async def turn_off_automation(self, idsf: int) -> None:
+        await self._send_request(FUNC_DOACTION, [{"idsf": idsf, "sfetype": SFE_CMD_ONOFF, "value": "Off"}])
 
     # ─── Climate / thermostat ─────────────────────────────────────────────────
 

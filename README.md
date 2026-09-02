@@ -3,7 +3,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/Home%20Assistant-2024.1%2B-blue.svg)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.7.0-brightgreen.svg)](https://github.com/ivhazu/ha-vimar-view/releases)
+[![Version](https://img.shields.io/badge/version-1.8.0-brightgreen.svg)](https://github.com/ivhazu/ha-vimar-view/releases)
 
 > 🇮🇹 [Italiano](#italiano) | 🇬🇧 [English](#english)
 
@@ -31,6 +31,7 @@ Utilizza il protocollo WebSocket proprietario Vimar (`prod.vimar.cloud`) con aut
 | Modulo relè | **03981** | `light` | On/Off |
 | Dimmer connesso | **14595** | `light` | On/Off, Luminosità |
 | Attuatore di carico | **14593** | `sensor` + `select` + `button` | Potenza W, kWh, Stato, Modalità, Ripristina |
+| Attuatore (modalità presa) | **14593\*** | `switch` + `sensor` | On/Off, Potenza W, kWh |
 | Energy Meter | **02963** | `sensor` + `number` | Consumo totale W/kWh, Soglia alert/distacco |
 | Tapparella connessa | **30804** | `cover` | Apri, Chiudi, Stop, Posizione % |
 | Termostato zona clima | **02912** | `climate` + `number` | On/Off, Riscaldamento/Raffreddamento, Temperatura, Preset, Setpoint avanzati |
@@ -52,6 +53,15 @@ Utilizza il protocollo WebSocket proprietario Vimar (`prod.vimar.cloud`) con aut
 | `sensor.<nome>_stato` | Sensor | Stato testuale (Auto on / Forced on / ecc.) |
 | `select.<nome>_modalita` | Select | Controllo modalità: Auto / Forced on / Forced off |
 | `button.<nome>_ripristina` | Button | Ripristina il carico in modalità Auto |
+
+#### Per ogni attuatore (modalità presa\*)
+| Entità | Tipo | Descrizione |
+|---|---|---|
+| `switch.<nome>` | Switch | Accensione/spegnimento presa |
+| `sensor.<nome>_potenza` | Sensor (W) | Potenza istantanea |
+| `sensor.<nome>_energia` | Sensor (kWh) | Energia accumulata (persiste ai riavvii) |
+
+> \* Il dispositivo 14593 può essere configurato in due modalità nell'app Vimar View: **gestione carico** (con protezione e automazione) oppure **presa/automazione** (semplice on/off). Le entità create dipendono dalla modalità scelta.
 
 #### Per ogni tapparella
 | Entità | Tipo | Descrizione |
@@ -212,6 +222,7 @@ Uses Vimar's proprietary WebSocket protocol (`prod.vimar.cloud`) with OAuth2 PKC
 | Relay module | **03981** | `light` | On/Off |
 | Connected dimmer | **14595** | `light` | On/Off, Brightness |
 | Load actuator | **14593** | `sensor` + `select` + `button` | Power W, kWh, State, Mode, Restore |
+| Actuator (outlet mode) | **14593\*** | `switch` + `sensor` | On/Off, Power W, kWh |
 | Energy Meter | **02963** | `sensor` + `number` | Total power W/kWh, Alert/disconnect thresholds |
 | Connected shutter | **30804** | `cover` | Open, Close, Stop, Position % |
 | Climate zone thermostat | **02912** | `climate` + `number` | On/Off, Heat/Cool, Temperature, Presets, Advanced setpoints |
@@ -233,6 +244,15 @@ Uses Vimar's proprietary WebSocket protocol (`prod.vimar.cloud`) with OAuth2 PKC
 | `sensor.<name>_state` | Sensor | Text state (Auto on / Forced on / etc.) |
 | `select.<name>_mode` | Select | Mode control: Auto / Forced on / Forced off |
 | `button.<name>_restore` | Button | Restore load to Auto mode |
+
+#### For each actuator (outlet mode\*)
+| Entity | Type | Description |
+|---|---|---|
+| `switch.<name>` | Switch | Outlet on/off control |
+| `sensor.<name>_power` | Sensor (W) | Instantaneous power |
+| `sensor.<name>_energy` | Sensor (kWh) | Accumulated energy (persists across restarts) |
+
+> \* The 14593 device can be configured in two modes in the Vimar View app: **load control** (with protection and automation) or **outlet/automation** (simple on/off). The entities created depend on the chosen mode.
 
 #### For each shutter
 | Entity | Type | Description |

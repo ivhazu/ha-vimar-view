@@ -52,6 +52,11 @@ async def async_setup_entry(
             entities.append(VimarEnergySensor(client, idsf, "Energia", dev_info, f"{DOMAIN}_{idsf}_kwh"))
             entities.append(VimarLoadStateSensor(client, idsf, dev_info, f"{DOMAIN}_{idsf}_load_state"))
 
+        elif dt == "automation_switch":
+            dev_info = device_info_for_idsf(client, idsf, entry)
+            entities.append(VimarAutomationPowerSensor(client, idsf, dev_info, entry))
+            entities.append(VimarAutomationEnergySensor(client, idsf, dev_info, entry))
+
     async_add_entities(entities)
 
 
@@ -221,3 +226,94 @@ class VimarLoadStateSensor(SensorEntity):
     @property
     def native_value(self) -> str | None:
         return self._client.get_state(self._idsf, SFE_STATE_LOAD)
+
+
+class VimarAutomationPowerSensor(SensorEntity):
+    """Instantaneous power sensor for SS_Automation_OnOff devices."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Potenza"
+    _attr_native_unit_of_measurement = "W"
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, client: VimarCloudClient, idsf: int, dev_info: dict, entry: ConfigEntry) -> None:
+        self._client = client
+        self._idsf = idsf
+        self._attr_device_info = dev_info
+        self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_{idsf}_automation_power"
+
+    async def async_added_to_hass(self) -> None:
+        self._client.register_state_callback(self._on_update)
+
+    @callback
+    def _on_update(self, updated: list[int]) -> None:
+        if self._idsf in updated:
+            self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> float | None:
+        value = self._client.get_state(self._idsf, "SFE_State_GlobalActivePowerConsumption")
+        try:
+            return float(value) if value is not None else None
+        except (ValueError, TypeError):
+            return None
+
+
+class VimarAutomationEnergySensor(RestoreEntity, SensorEntity):
+    """Energy sensor (kWh) for SS_Automation_OnOff devices.
+
+    Uses trapezoidal integration of power over time.
+    Accumulated value persists across HA restarts via RestoreEntity.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Energia"
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+
+    def __init__(self, client: VimarCloudClient, idsf: int, dev_info: dict, entry: ConfigEntry) -> None:
+        self._client = client
+        self._idsf = idsf
+        self._attr_device_info = dev_info
+        self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_{idsf}_automation_kwh"
+        self._accumulated_kwh: float = 0.0
+        self._last_power_w: float | None = None
+        self._last_ts: float | None = None
+
+    async def async_added_to_hass(self) -> None:
+        last_state = await self.async_get_last_state()
+        if last_state and last_state.state not in ("unknown", "unavailable", None):
+            try:
+                self._accumulated_kwh = float(last_state.state)
+            except (ValueError, TypeError):
+                self._accumulated_kwh = 0.0
+        self._last_ts = time.monotonic()
+        self._client.register_state_callback(self._on_update)
+
+    @callback
+    def _on_update(self, updated: list[int]) -> None:
+        if self._idsf not in updated:
+            return
+        value = self._client.get_state(self._idsf, "SFE_State_GlobalActivePowerConsumption")
+        if value is None:
+            return
+        try:
+            power_w = float(value)
+        except (ValueError, TypeError):
+            return
+        now = time.monotonic()
+        if self._last_power_w is not None and self._last_ts is not None:
+            dt_hours = (now - self._last_ts) / 3600.0
+            avg_w = (self._last_power_w + power_w) / 2.0
+            delta_kwh = (avg_w * dt_hours) / 1000.0
+            if delta_kwh >= 0:
+                self._accumulated_kwh += delta_kwh
+        self._last_power_w = power_w
+        self._last_ts = now
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> float:
+        return round(self._accumulated_kwh, 4)
