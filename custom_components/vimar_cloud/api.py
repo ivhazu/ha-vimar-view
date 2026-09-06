@@ -41,6 +41,7 @@ from .const import (
     SFE_CMD_LOAD,
     SFE_CMD_ONOFF,
     SFE_CMD_SHUTTER,
+    SFE_CMD_TIMED_DYNAMIC_MODE,
     SFE_STATE_BRIGHTNESS,
     SFE_STATE_GLOBAL_ACTIVE_POWER,
     SFE_STATE_GLOBAL_THRESHOLD,
@@ -108,7 +109,6 @@ class VimarCloudClient:
         self._plant_uid = plant_uid
 
         self._access_token: str | None = None
-        # Pre-load saved refresh token to avoid full login on restart
         self._refresh_token: str | None = refresh_token
         self._token_expires_at: float = 0
 
@@ -123,6 +123,7 @@ class VimarCloudClient:
         self.device_states: dict[int, dict[str, Any]] = {}
         self.devices: dict[int, dict] = {}
         self.measure_to_load: dict[int, int] = {}
+        self.automation_to_measure: dict[int, int] = {}
         self.idsf_energy_manager: int | None = None
 
         self.plant_name: str = ""
@@ -136,7 +137,6 @@ class VimarCloudClient:
         self._discovery_callback: Callable | None = None
 
     def set_token_update_callback(self, callback: Callable[[str], None]) -> None:
-        """Register callback fired whenever refresh token changes (to persist it)."""
         self._token_update_callback = callback
 
     # ─── Token management ────────────────────────────────────────────────────
@@ -149,8 +149,7 @@ class VimarCloudClient:
             try:
                 return await self._refresh_access_token()
             except Exception:
-                _LOGGER.warning(
-                    "Vimar: refresh token failed, doing full login")
+                _LOGGER.warning("Vimar: refresh token failed, doing full login")
         return await self._login()
 
     async def _login(self) -> str:
@@ -211,8 +210,7 @@ class VimarCloudClient:
                         location = r.headers.get("Location", "")
 
                 if status not in (301, 302, 303, 307, 308):
-                    raise VimarAuthError(
-                        f"Unexpected status {status} during redirect chain")
+                    raise VimarAuthError(f"Unexpected status {status} during redirect chain")
 
                 if location.startswith(VIMAR_REDIRECT_URI):
                     m = re.search(r"code=([^&\s]+)", location)
@@ -225,8 +223,7 @@ class VimarCloudClient:
                 method = "GET"
 
             if not auth_code:
-                raise VimarAuthError(
-                    "Authorization code not found in redirect chain")
+                raise VimarAuthError("Authorization code not found in redirect chain")
 
             token_data = {
                 "grant_type": "authorization_code",
@@ -238,17 +235,14 @@ class VimarCloudClient:
             async with session.post(VIMAR_AUTH_URL, data=token_data) as resp:
                 if resp.status != 200:
                     text = await resp.text()
-                    raise VimarAuthError(
-                        f"Token exchange failed ({resp.status}): {text}")
+                    raise VimarAuthError(f"Token exchange failed ({resp.status}): {text}")
                 tokens = await resp.json()
 
         self._store_tokens(tokens)
-        _LOGGER.info("Vimar: full login OK, refresh_token obtained: %s",
-                     "yes" if self._refresh_token else "no")
+        _LOGGER.info("Vimar: full login OK, refresh_token obtained: %s", "yes" if self._refresh_token else "no")
         return self._access_token  # type: ignore[return-value]
 
     async def _refresh_access_token(self) -> str:
-        """Use saved refresh token to get a new access token without full login."""
         async with aiohttp.ClientSession() as session:
             data = {
                 "client_id": VIMAR_CLIENT_ID,
@@ -257,8 +251,7 @@ class VimarCloudClient:
             }
             async with session.post(VIMAR_AUTH_URL, data=data) as resp:
                 if resp.status != 200:
-                    raise VimarAuthError(
-                        f"Refresh token failed ({resp.status})")
+                    raise VimarAuthError(f"Refresh token failed ({resp.status})")
                 token_data = await resp.json()
 
         self._store_tokens(token_data)
@@ -266,7 +259,6 @@ class VimarCloudClient:
         return self._access_token  # type: ignore[return-value]
 
     def _store_tokens(self, tokens: dict) -> None:
-        """Store tokens and notify callback to persist refresh token."""
         self._access_token = tokens["access_token"]
         new_refresh = tokens.get("refresh_token")
         if new_refresh:
@@ -356,12 +348,9 @@ class VimarCloudClient:
         msg_type = msg.get("type")
         function = msg.get("function")
         error = msg.get("error", 0)
-        # _LOGGER.warning(
-        #     "VIMAR-DEBUG: msg_type=%s function=%s error=%s", msg_type, function, error)
 
         if error != 0:
-            _LOGGER.error("Vimar: error in %s: %s",
-                          function, msg.get("result"))
+            _LOGGER.error("Vimar: error in %s: %s", function, msg.get("result"))
             return
 
         if msg_type == "response":
@@ -380,20 +369,13 @@ class VimarCloudClient:
                 srv = info.get("serverinfo", {})
                 self.gateway_sw_version = srv.get("softwareversion", "")
                 self.gateway_mac = srv.get("mac", "")
-                # _LOGGER.warning("VIMAR-DEBUG: attach OK plant=%r fw=%s — sending sfdiscovery",
-                #                 self.plant_name, self.gateway_sw_version)
                 await self._send_request(FUNC_SFDISCOVERY, [{"sfcategory": SF_CATEGORY_PLANT}])
 
         elif function == FUNC_SFDISCOVERY:
-            # _LOGGER.warning("VIMAR-DEBUG: sfdiscovery result len=%d first_keys=%s",
-            #                 len(result), list(result[0].keys()) if result else [])
             if result and isinstance(result[0], dict) and "sf" in result[0]:
                 await self._process_plant_discovery(result)
             else:
-                # _LOGGER.warning(
-                #     "VIMAR-DEBUG: sfdiscovery — condition NOT met, skipped plant discovery")
-                _LOGGER.debug("Vimar: BigData discovery: %s",
-                              json.dumps(result)[:500])
+                _LOGGER.debug("Vimar: BigData discovery: %s", json.dumps(result)[:500])
 
         elif function == FUNC_GETSTATUS:
             await self._process_status_update(result)
@@ -406,31 +388,48 @@ class VimarCloudClient:
             await self._process_status_update(msg.get("args", []))
 
     async def _process_plant_discovery(self, result: list) -> None:
-        # _LOGGER.warning(
-        #     "VIMAR-DEBUG: _process_plant_discovery called, result items=%d", len(result))
         sf_list: list[dict] = []
         for item in result:
+            idambient = item.get("idambient")
             if "sf" in item:
-                sf_list.extend(item["sf"])
+                for sf in item["sf"]:
+                    sf["_idambient"] = idambient
+                    sf_list.append(sf)
             elif "idsf" in item:
+                item["_idambient"] = idambient
                 sf_list.append(item)
-        # _LOGGER.warning(
-        #     "VIMAR-DEBUG: sf_list built, %d SF entries", len(sf_list))
 
         load_idsfs: set[int] = set()
-        measure_idsfs: dict[int, int] = {}
+        automation_by_ambient_name: dict[tuple[Any, str], int] = {}
+        measure_sfs: list[dict] = []
 
         for sf in sf_list:
             idsf = sf.get("idsf")
             sstype = sf.get("sstype", "")
+            amb = sf.get("_idambient")
+            name = sf.get("name", "")
             if idsf is None:
                 continue
+
             if sstype == "SS_Energy_Load":
                 load_idsfs.add(idsf)
+            elif sstype == "SS_Automation_OnOff":
+                automation_by_ambient_name[(amb, name)] = idsf
             elif sstype == "SS_Energy_Measure1P":
-                load_idsf = idsf - IDSF_PAIR_OFFSET
-                measure_idsfs[idsf] = load_idsf
-                self.measure_to_load[idsf] = load_idsf
+                measure_sfs.append(sf)
+
+        for sf in measure_sfs:
+            idsf = sf.get("idsf")
+            amb = sf.get("_idambient")
+            name = sf.get("name", "")
+
+            paired_load_idsf = idsf - IDSF_PAIR_OFFSET
+            if paired_load_idsf in load_idsfs:
+                self.measure_to_load[idsf] = paired_load_idsf
+            elif (amb, name) in automation_by_ambient_name:
+                auto_idsf = automation_by_ambient_name[(amb, name)]
+                self.measure_to_load[idsf] = auto_idsf
+                self.automation_to_measure[auto_idsf] = idsf
 
         idsf_to_register = []
 
@@ -449,16 +448,14 @@ class VimarCloudClient:
             }
 
             if sstype == "SS_Energy_Measure1P":
-                load_idsf = measure_idsfs.get(idsf)
-                if load_idsf and load_idsf in load_idsfs:
+                target_idsf = self.measure_to_load.get(idsf)
+                if target_idsf:
                     if initial_values:
-                        self.device_states.setdefault(
-                            load_idsf, {}).update(initial_values)
-                    reg_sfetypes = [
-                        s for s in sfetypes if s.startswith("SFE_State_")]
+                        self.device_states.setdefault(target_idsf, {}).update(initial_values)
+                        self.device_states.setdefault(idsf, {}).update(initial_values)
+                    reg_sfetypes = [s for s in sfetypes if s.startswith("SFE_State_")]
                     if reg_sfetypes:
-                        idsf_to_register.append(
-                            {"idsf": idsf, "sfetype": reg_sfetypes})
+                        idsf_to_register.append({"idsf": idsf, "sfetype": reg_sfetypes})
                     continue
 
             device_type = self._classify_device(sfetypes, sstype)
@@ -480,15 +477,18 @@ class VimarCloudClient:
 
             reg_sfetypes = [s for s in sfetypes if s.startswith("SFE_State_")]
             if reg_sfetypes:
-                idsf_to_register.append(
-                    {"idsf": idsf, "sfetype": reg_sfetypes})
+                idsf_to_register.append({"idsf": idsf, "sfetype": reg_sfetypes})
 
-        # _LOGGER.warning(
-        #     "VIMAR-DEBUG: discovered %d devices total", len(self.devices))
-        # for _idsf, _dev in self.devices.items():
-        #     _LOGGER.warning("VIMAR-DEBUG: device idsf=%s name=%r sstype=%s type=%s",
-        #                     _idsf, _dev.get("name"), _dev.get("sstype"), _dev.get("device_type"))
         await self._register_idsf(idsf_to_register)
+
+        for measure_idsf in self.measure_to_load.keys():
+            try:
+                await self._send_request(
+                    FUNC_DOACTION,
+                    [{"idsf": measure_idsf, "sfetype": SFE_CMD_TIMED_DYNAMIC_MODE, "value": "Start"}]
+                )
+            except Exception:
+                pass
 
         try:
             await self._send_request(FUNC_SFDISCOVERY, [{"sfcategory": SF_CATEGORY_BIGDATA}])
@@ -500,7 +500,6 @@ class VimarCloudClient:
             self._discovery_callback = None
 
     def _classify_device(self, sfetypes: list[str], sstype: str) -> str:
-        # _LOGGER.warning("VIMAR-DEBUG: _classify_device sstype=%r", sstype)
         if sstype == "SS_Clima_Zone":
             return "thermostat"
         if sstype == "SS_Light_Dimmer":
@@ -516,7 +515,7 @@ class VimarCloudClient:
         if sstype == "SS_Automation_OnOff":
             return "automation_switch"
         if sstype == "SS_SceneActivator_Activator":
-            return "scene_activator_unused"  # non esposto come entità
+            return "scene_activator_unused"
         if sstype == "SS_Scene_Executor":
             return "scene"
         if SFE_STATE_SHUTTER in sfetypes:
@@ -542,14 +541,19 @@ class VimarCloudClient:
 
             target_idsf = self.measure_to_load.get(idsf, idsf)
             self.device_states.setdefault(target_idsf, {})
+            self.device_states.setdefault(idsf, {})
+
             for element in item.get("elements", []):
                 sfetype = element.get("sfetype")
                 value = element.get("value")
                 if sfetype and value is not None:
                     self.device_states[target_idsf][sfetype] = value
+                    self.device_states[idsf][sfetype] = value
 
             if target_idsf not in updated_idsf:
                 updated_idsf.append(target_idsf)
+            if idsf not in updated_idsf:
+                updated_idsf.append(idsf)
 
         if updated_idsf:
             for callback in self._state_callbacks:
@@ -596,7 +600,6 @@ class VimarCloudClient:
         await self._send_request(FUNC_DOACTION, [{"idsf": idsf, "sfetype": SFE_CMD_SHUTTER, "value": SHUTTER_CMD_STOP}])
 
     async def set_cover_position(self, idsf: int, vimar_pos: int) -> None:
-        """Set cover position. vimar_pos: 0=open, 100=closed."""
         await self._send_request(FUNC_DOACTION, [{"idsf": idsf, "sfetype": SFE_CMD_SHUTTER, "value": str(vimar_pos)}])
 
     async def execute_scene(self, idsf: int) -> None:
@@ -604,6 +607,15 @@ class VimarCloudClient:
 
     async def turn_on_automation(self, idsf: int) -> None:
         await self._send_request(FUNC_DOACTION, [{"idsf": idsf, "sfetype": SFE_CMD_ONOFF, "value": "On"}])
+        measure_idsf = self.automation_to_measure.get(idsf)
+        if measure_idsf:
+            try:
+                await self._send_request(
+                    FUNC_DOACTION,
+                    [{"idsf": measure_idsf, "sfetype": SFE_CMD_TIMED_DYNAMIC_MODE, "value": "Start"}]
+                )
+            except Exception:
+                pass
 
     async def turn_off_automation(self, idsf: int) -> None:
         await self._send_request(FUNC_DOACTION, [{"idsf": idsf, "sfetype": SFE_CMD_ONOFF, "value": "Off"}])
@@ -611,22 +623,18 @@ class VimarCloudClient:
     # ─── Climate / thermostat ─────────────────────────────────────────────────
 
     async def set_climate_hvac_mode(self, idsf: int, vimar_mode: str) -> None:
-        """Set the HVAC mode: 'Off', 'Auto', or 'Timed manual'."""
         await self._send_request(FUNC_DOACTION, [{"idsf": idsf, "sfetype": SFE_CMD_HVAC_MODE, "value": vimar_mode}])
 
     async def set_climate_change_over(self, idsf: int, change_over: str) -> None:
-        """Switch between 'Heating' and 'Cooling' season."""
         await self._send_request(FUNC_DOACTION, [{"idsf": idsf, "sfetype": SFE_CMD_CHANGE_OVER_MODE, "value": change_over}])
 
     async def set_climate_temperature(self, idsf: int, temperature: float) -> None:
-        """Set the ambient setpoint. Switches to 'Timed manual' if currently in 'Auto' program mode."""
         current_mode = self.get_state(idsf, SFE_STATE_HVAC_MODE)
         if current_mode == HVAC_MODE_VIMAR_AUTO:
             await self.set_climate_hvac_mode(idsf, HVAC_MODE_VIMAR_TIMED_MANUAL)
         await self._send_request(FUNC_DOACTION, [{"idsf": idsf, "sfetype": SFE_CMD_AMBIENT_SETPOINT, "value": str(temperature)}])
 
     async def set_climate_setpoint(self, idsf: int, cmd_sfetype: str, value: float) -> None:
-        """Set any advanced thermostat temperature setpoint (reduction, absence, protection)."""
         await self._send_request(FUNC_DOACTION, [{"idsf": idsf, "sfetype": cmd_sfetype, "value": str(value)}])
 
     # ─── Connection lifecycle ─────────────────────────────────────────────────
@@ -641,8 +649,6 @@ class VimarCloudClient:
             try:
                 token = await self._get_token()
                 ws_url = f"{VIMAR_WS_URL}?duid={self._duid}&access_token={token}"
-                # _LOGGER.warning(
-                #     "VIMAR-DEBUG: connecting to WebSocket url=%s", ws_url[:60])
 
                 async with aiohttp.ClientSession() as session:
                     async with session.ws_connect(
@@ -661,16 +667,14 @@ class VimarCloudClient:
                         self._client_token = _random_client_token()
                         retry_delay = 5
 
-                        self._keepalive_task = asyncio.create_task(
-                            self._keepalive_loop())
+                        self._keepalive_task = asyncio.create_task(self._keepalive_loop())
                         await self._attach()
 
                         async for msg in ws:
                             if msg.type == aiohttp.WSMsgType.TEXT:
                                 await self._handle_message(msg.data)
                             elif msg.type == aiohttp.WSMsgType.ERROR:
-                                _LOGGER.warning(
-                                    "Vimar: WS error: %s", ws.exception())
+                                _LOGGER.warning("Vimar: WS error: %s", ws.exception())
                                 break
                             elif msg.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.CLOSED):
                                 _LOGGER.info("Vimar: WS closed")

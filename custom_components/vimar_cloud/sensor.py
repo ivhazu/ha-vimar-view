@@ -95,11 +95,7 @@ class VimarPowerSensor(SensorEntity):
 
 
 class VimarEnergySensor(RestoreEntity, SensorEntity):
-    """Energy sensor (kWh) — Riemann sum integral of power (W).
-
-    Uses the trapezoidal method to integrate power over time.
-    The accumulated value persists across HA restarts via RestoreEntity.
-    """
+    """Energy sensor (kWh) — Riemann sum integral of power (W)."""
 
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.ENERGY
@@ -117,7 +113,6 @@ class VimarEnergySensor(RestoreEntity, SensorEntity):
         self._last_ts: float | None = None
 
     async def async_added_to_hass(self) -> None:
-        """Restore accumulated value from recorder and subscribe to updates."""
         last_state = await self.async_get_last_state()
         if last_state and last_state.state not in ("unknown", "unavailable", None):
             try:
@@ -127,7 +122,6 @@ class VimarEnergySensor(RestoreEntity, SensorEntity):
                 self._accumulated_kwh = 0.0
 
         self._last_ts = time.monotonic()
-        # Subscribe to state changes from our client
         self._client.register_state_callback(self._on_update)
 
     @callback
@@ -148,7 +142,6 @@ class VimarEnergySensor(RestoreEntity, SensorEntity):
 
         if self._last_power_w is not None and self._last_ts is not None:
             dt_hours = (now - self._last_ts) / 3600.0
-            # Trapezoidal rule
             avg_w = (self._last_power_w + power_w) / 2.0
             delta_kwh = (avg_w * dt_hours) / 1000.0
             if delta_kwh >= 0:
@@ -233,7 +226,7 @@ class VimarAutomationPowerSensor(SensorEntity):
 
     _attr_has_entity_name = True
     _attr_name = "Potenza"
-    _attr_native_unit_of_measurement = "W"
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
 
@@ -253,7 +246,7 @@ class VimarAutomationPowerSensor(SensorEntity):
 
     @property
     def native_value(self) -> float | None:
-        value = self._client.get_state(self._idsf, "SFE_State_GlobalActivePowerConsumption")
+        value = self._client.get_state(self._idsf, SFE_STATE_GLOBAL_ACTIVE_POWER)
         try:
             return float(value) if value is not None else None
         except (ValueError, TypeError):
@@ -261,11 +254,7 @@ class VimarAutomationPowerSensor(SensorEntity):
 
 
 class VimarAutomationEnergySensor(RestoreEntity, SensorEntity):
-    """Energy sensor (kWh) for SS_Automation_OnOff devices.
-
-    Uses trapezoidal integration of power over time.
-    Accumulated value persists across HA restarts via RestoreEntity.
-    """
+    """Energy sensor (kWh) for SS_Automation_OnOff devices."""
 
     _attr_has_entity_name = True
     _attr_name = "Energia"
@@ -296,7 +285,7 @@ class VimarAutomationEnergySensor(RestoreEntity, SensorEntity):
     def _on_update(self, updated: list[int]) -> None:
         if self._idsf not in updated:
             return
-        value = self._client.get_state(self._idsf, "SFE_State_GlobalActivePowerConsumption")
+        value = self._client.get_state(self._idsf, SFE_STATE_GLOBAL_ACTIVE_POWER)
         if value is None:
             return
         try:
