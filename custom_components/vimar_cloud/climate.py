@@ -83,9 +83,9 @@ class VimarClimate(ClimateEntity):
     ) -> None:
         self._client = client
         self._idsf = idsf
-        self._attr_name = device["name"]
+        self._attr_name = None  # nome dal device, evita duplicazione
         self._attr_unique_id = f"{entry.entry_id}_{idsf}_climate"
-        self._attr_device_info = device_info_for_idsf(client, idsf, entry, hass)
+        self._attr_device_info = device_info_for_idsf(client, idsf, entry)
 
     async def async_added_to_hass(self) -> None:
         self._client.register_state_callback(self._on_update)

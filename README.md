@@ -253,6 +253,7 @@ Uses Vimar's proprietary WebSocket protocol (`prod.vimar.cloud`) with OAuth2 PKC
 | `sensor.<name>_energy` | Sensor (kWh) | Accumulated energy (persists across restarts) |
 
 > \* The 14593 device can be configured in two modes in the Vimar View app: **load control** (with protection and automation) or **outlet/automation** (simple on/off). The entities created depend on the chosen mode.
+| `button.<name>_restore` | Button | Restore load to Auto mode |
 
 #### For each shutter
 | Entity | Type | Description |
