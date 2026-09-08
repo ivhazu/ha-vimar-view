@@ -45,7 +45,7 @@ class VimarAutomationSwitch(SwitchEntity):
         self._idsf = idsf
         self._attr_name = device["name"]
         self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_{idsf}_switch"
-        self._attr_device_info = device_info_for_idsf(client, idsf, entry)
+        self._attr_device_info = device_info_for_idsf(client, idsf, entry, hass)
 
     async def async_added_to_hass(self) -> None:
         self._client.register_state_callback(self._on_update)

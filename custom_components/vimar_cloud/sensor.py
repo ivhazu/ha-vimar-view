@@ -40,20 +40,20 @@ async def async_setup_entry(
         dt = device.get("device_type")
 
         if dt == "energy_manager":
-            em_info = energy_manager_device_info(entry, client)
+            em_info = energy_manager_device_info(entry, client, hass)
             entities.append(VimarPowerSensor(client, idsf, "Consumo Totale", em_info, f"{DOMAIN}_{idsf}_total_power"))
             entities.append(VimarEnergySensor(client, idsf, "Consumo Totale kWh", em_info, f"{DOMAIN}_{idsf}_total_kwh"))
             entities.append(VimarThresholdSensor(client, idsf, "Soglia Alert", 0, em_info, f"{DOMAIN}_{idsf}_threshold_alert"))
             entities.append(VimarThresholdSensor(client, idsf, "Soglia Distacco", 1, em_info, f"{DOMAIN}_{idsf}_threshold_disconnect"))
 
         elif dt == "load_control":
-            dev_info = device_info_for_idsf(client, idsf, entry)
+            dev_info = device_info_for_idsf(client, idsf, entry, hass)
             entities.append(VimarPowerSensor(client, idsf, "Potenza", dev_info, f"{DOMAIN}_{idsf}_power"))
             entities.append(VimarEnergySensor(client, idsf, "Energia", dev_info, f"{DOMAIN}_{idsf}_kwh"))
             entities.append(VimarLoadStateSensor(client, idsf, dev_info, f"{DOMAIN}_{idsf}_load_state"))
 
         elif dt == "automation_switch":
-            dev_info = device_info_for_idsf(client, idsf, entry)
+            dev_info = device_info_for_idsf(client, idsf, entry, hass)
             entities.append(VimarAutomationPowerSensor(client, idsf, dev_info, entry))
             entities.append(VimarAutomationEnergySensor(client, idsf, dev_info, entry))
 

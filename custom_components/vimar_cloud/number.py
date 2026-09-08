@@ -99,7 +99,7 @@ async def async_setup_entry(
     # Energy manager — soglie di potenza
     idsf = client.idsf_energy_manager
     if idsf is not None:
-        em_info = energy_manager_device_info(entry, client)
+        em_info = energy_manager_device_info(entry, client, hass)
         entities.append(VimarThresholdNumber(
             client, idsf, "Imposta Soglia Alert", 0, em_info, f"{DOMAIN}_{idsf}_set_alert"))
         entities.append(VimarThresholdNumber(
@@ -108,7 +108,7 @@ async def async_setup_entry(
     # Termostati — setpoint avanzati di temperatura
     for idsf, device in client.devices.items():
         if device.get("device_type") == "thermostat":
-            dev_info = device_info_for_idsf(client, idsf, entry)
+            dev_info = device_info_for_idsf(client, idsf, entry, hass)
             for cfg in CLIMATE_SETPOINTS:
                 entities.append(
                     VimarClimateSetpointNumber(

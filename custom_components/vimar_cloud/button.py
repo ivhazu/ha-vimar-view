@@ -44,7 +44,7 @@ class VimarRestoreLoadButton(ButtonEntity):
         self._idsf = idsf
         self._attr_name = "Ripristina"
         self._attr_unique_id = f"{DOMAIN}_{idsf}_restore"
-        self._attr_device_info = device_info_for_idsf(client, idsf, entry)
+        self._attr_device_info = device_info_for_idsf(client, idsf, entry, hass)
 
     async def async_press(self) -> None:
         await self._client.restore_load(self._idsf)
@@ -58,7 +58,7 @@ class VimarRestoreAllLoadsButton(ButtonEntity):
     def __init__(self, client: VimarCloudClient, entry: ConfigEntry) -> None:
         self._client = client
         self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_restore_all"
-        self._attr_device_info = energy_manager_device_info(entry, client)
+        self._attr_device_info = energy_manager_device_info(entry, client, hass)
 
     async def async_press(self) -> None:
         await self._client.restore_all_loads()
@@ -79,7 +79,7 @@ class VimarSceneButton(ButtonEntity):
         self._idsf = idsf
         self._attr_name = device["name"]
         self._attr_unique_id = f"{DOMAIN}_{idsf}_scene"
-        self._attr_device_info = device_info_for_idsf(client, idsf, entry)
+        self._attr_device_info = device_info_for_idsf(client, idsf, entry, hass)
 
     async def async_press(self) -> None:
         await self._client.execute_scene(self._idsf)
