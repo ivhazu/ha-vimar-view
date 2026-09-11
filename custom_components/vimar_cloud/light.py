@@ -40,12 +40,15 @@ class VimarLight(LightEntity):
     def __init__(self, client: VimarCloudClient, idsf: int, device: dict, entry: ConfigEntry) -> None:
         self._client = client
         self._idsf = idsf
-        self._attr_name = None  # nome dal device, evita duplicazione
+        self._attr_name = None  # Main feature: inherit the device name without duplicating it
         self._attr_unique_id = f"{DOMAIN}_{idsf}_light"
         self._attr_device_info = device_info_for_idsf(client, idsf, entry)
 
     async def async_added_to_hass(self) -> None:
         self._client.register_state_callback(self._on_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        self._client.unregister_state_callback(self._on_update)
 
     @callback
     def _on_update(self, updated: list[int]) -> None:

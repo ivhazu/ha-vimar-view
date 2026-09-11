@@ -20,15 +20,29 @@ def gateway_device_info(entry: ConfigEntry, client: VimarCloudClient) -> DeviceI
     )
 
 
+def _normalize_device_name(name: object, idsf: int) -> str:
+    """Normalize duplicated Vimar display names."""
+    if not isinstance(name, str):
+        return f"Device {idsf}"
+    name = " ".join(name.split()).strip()
+    if not name:
+        return f"Device {idsf}"
+    words = name.split(" ")
+    if len(words) >= 2 and len(words) % 2 == 0:
+        half = len(words) // 2
+        if [w.casefold() for w in words[:half]] == [w.casefold() for w in words[half:]]:
+            return " ".join(words[:half])
+    return name
+
+
 def device_info_for_idsf(
     client: VimarCloudClient,
     idsf: int,
     entry: ConfigEntry,
-    hass=None,
 ) -> DeviceInfo:
     """DeviceInfo for a single Vimar device."""
     device = client.devices.get(idsf, {})
-    name = device.get("name", f"Device {idsf}")
+    name = _normalize_device_name(device.get("name"), idsf)
     sstype = device.get("sstype", "")
     model = SSTYPE_LABELS.get(sstype, sstype) if sstype else "Dispositivo Vimar"
 
@@ -38,14 +52,13 @@ def device_info_for_idsf(
         manufacturer="Vimar",
         model=model,
         serial_number=str(idsf),
-        via_device=(DOMAIN, entry.entry_id),
+        via_device_id=client.gateway_device_id,
     )
 
 
 def energy_manager_device_info(
     entry: ConfigEntry,
     client: VimarCloudClient,
-    hass=None,
 ) -> DeviceInfo:
     """DeviceInfo for the energy manager."""
     idsf = client.idsf_energy_manager
@@ -55,5 +68,5 @@ def energy_manager_device_info(
         manufacturer="Vimar",
         model=ENERGY_MANAGER_MODEL,
         serial_number=str(idsf) if idsf else None,
-        via_device=(DOMAIN, entry.entry_id),
+        via_device_id=client.gateway_device_id,
     )

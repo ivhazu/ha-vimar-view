@@ -50,6 +50,9 @@ class VimarAutomationSwitch(SwitchEntity):
     async def async_added_to_hass(self) -> None:
         self._client.register_state_callback(self._on_update)
 
+    async def async_will_remove_from_hass(self) -> None:
+        self._client.unregister_state_callback(self._on_update)
+
     @callback
     def _on_update(self, updated: list[int]) -> None:
         if self._idsf in updated:

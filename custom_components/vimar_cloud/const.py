@@ -20,6 +20,10 @@ CONF_PLANT_NAME = "plant_name"
 # Token
 TOKEN_REFRESH_MARGIN = 60
 KEEPALIVE_INTERVAL = 25
+# Do not integrate energy across long gaps in cloud updates.
+MAX_ENERGY_SAMPLE_GAP = 300
+# Network timeouts for authentication/token operations.
+HTTP_TIMEOUT_SECONDS = 30
 
 # SFE types — shutters
 SFE_STATE_SHUTTER = "SFE_State_Shutter"

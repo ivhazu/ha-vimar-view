@@ -3,7 +3,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/Home%20Assistant-2024.1%2B-blue.svg)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.8.0-brightgreen.svg)](https://github.com/ivhazu/ha-vimar-view/releases)
+[![Version](https://img.shields.io/badge/version-1.9.0-brightgreen.svg)](https://github.com/ivhazu/ha-vimar-view/releases)
 
 > 🇮🇹 [Italiano](#italiano) | 🇬🇧 [English](#english)
 
@@ -179,7 +179,7 @@ I sensori kWh dell'integrazione sono compatibili con la **dashboard Energia** na
 
 L'integrazione si connette al cloud Vimar tramite **WebSocket** (`wss://prod.vimar.cloud/wssmqtt/deviceproxy`) usando il protocollo proprietario Vimar con autenticazione **OAuth2 PKCE** (tramite Keycloak su `prod.vimar.cloud`).
 
-Il calcolo dei **kWh** avviene tramite integrazione trapezoidale della potenza W nel tempo, con persistenza del valore accumulato attraverso i riavvii di HA grazie a `RestoreEntity`.
+Il calcolo dei **kWh** avviene localmente tramite integrazione trapezoidale della sola potenza istantanea W fornita da Vimar. Per evitare di inventare consumi durante interruzioni del cloud/WebSocket, gli intervalli più lunghi di 5 minuti non vengono integrati. Il valore accumulato persiste attraverso i riavvii di HA grazie a `RestoreEntity`.
 
 La connessione è **cloud_push**: gli aggiornamenti di stato arrivano in tempo reale tramite messaggi `changestatus` dal gateway, senza polling.
 
@@ -190,7 +190,7 @@ La connessione è **cloud_push**: gli aggiornamenti di stato arrivano in tempo r
 - Le **automazioni** (Routine) dell'app View non sono ancora supportate
 - I **dati storici** (kWh giornalieri/mensili) richiedono un piano MyVimar a pagamento e non sono disponibili con il piano gratuito
 - Il **DUID** deve essere inserito manualmente (auto-discovery in sviluppo)
-- Questa integrazione è stata sviluppata con il supporto di **[Claude](https://claude.ai)**, l'assistente AI di Anthropic
+- Questa integrazione è stata sviluppata con il supporto di **[Claude](https://claude.ai)** e **ChatGPT (OpenAI)**
 
 ---
 
@@ -371,7 +371,7 @@ The integration's kWh sensors are compatible with HA's native **Energy Dashboard
 
 The integration connects to the Vimar cloud via **WebSocket** (`wss://prod.vimar.cloud/wssmqtt/deviceproxy`) using Vimar's proprietary protocol with **OAuth2 PKCE** authentication (via Keycloak on `prod.vimar.cloud`).
 
-**kWh** calculation uses trapezoidal integration of power W over time, with accumulated value persisted across HA restarts via `RestoreEntity`.
+**kWh** calculation is performed locally by trapezoidal integration of the instantaneous power W provided by Vimar. Intervals longer than 5 minutes are not integrated, preventing artificial consumption from cloud/WebSocket outages. The accumulated value is persisted across HA restarts via `RestoreEntity`.
 
 The connection is **cloud_push**: state updates arrive in real-time via `changestatus` messages from the gateway, no polling.
 
@@ -382,7 +382,7 @@ The connection is **cloud_push**: state updates arrive in real-time via `changes
 - App **Routines** (automations) are not yet supported
 - **Historical data** (daily/monthly kWh) requires a paid MyVimar plan
 - **DUID** must be entered manually (auto-discovery in development)
-- This integration was developed with the support of **[Claude](https://claude.ai)**, Anthropic's AI assistant
+- This integration was developed with the support of **[Claude](https://claude.ai)** and **ChatGPT (OpenAI)**
 
 ---
 
@@ -397,3 +397,9 @@ Pull requests are welcome! For bugs or feature requests, use [Issues](https://gi
 MIT License — see [LICENSE](LICENSE) for details.
 
 *This integration is not affiliated with or endorsed by Vimar S.p.A.*
+
+### Naming delle entity
+
+Le entity che rappresentano la funzione principale di un dispositivo usano `has_entity_name=True` e `name=None`, così Home Assistant usa il nome del dispositivo una sola volta (ad esempio `light.faretti`). Le entity secondarie mantengono invece un nome proprio (ad esempio `sensor.faretti_potenza`). Questo evita duplicazioni come `faretti_faretti`.
+
+Le entity già presenti nel registry di Home Assistant non vengono forzatamente rinominate: un eventuale `entity_id` personalizzato dall'utente viene preservato.

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import logging
 import time
 
@@ -22,8 +23,10 @@ from .const import (
     SFE_STATE_GLOBAL_ACTIVE_POWER,
     SFE_STATE_GLOBAL_THRESHOLD,
     SFE_STATE_LOAD,
+    MAX_ENERGY_SAMPLE_GAP,
 )
 from .device_info import device_info_for_idsf, energy_manager_device_info
+from .energy import integrate_power_delta_kwh
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -80,6 +83,9 @@ class VimarPowerSensor(SensorEntity):
     async def async_added_to_hass(self) -> None:
         self._client.register_state_callback(self._on_update)
 
+    async def async_will_remove_from_hass(self) -> None:
+        self._client.unregister_state_callback(self._on_update)
+
     @callback
     def _on_update(self, updated: list[int]) -> None:
         if self._idsf in updated:
@@ -124,6 +130,9 @@ class VimarEnergySensor(RestoreEntity, SensorEntity):
         self._last_ts = time.monotonic()
         self._client.register_state_callback(self._on_update)
 
+    async def async_will_remove_from_hass(self) -> None:
+        self._client.unregister_state_callback(self._on_update)
+
     @callback
     def _on_update(self, updated: list[int]) -> None:
         if self._idsf not in updated:
@@ -138,14 +147,24 @@ class VimarEnergySensor(RestoreEntity, SensorEntity):
         except (ValueError, TypeError):
             return
 
+        # Vimar exposes instantaneous power only. We integrate locally, but never
+        # invent consumption across long cloud/WebSocket gaps.
+        if not math.isfinite(power_w) or power_w < 0:
+            _LOGGER.warning("Vimar: ignoring invalid power value %r", power_w_raw)
+            return
+
         now = time.monotonic()
 
         if self._last_power_w is not None and self._last_ts is not None:
-            dt_hours = (now - self._last_ts) / 3600.0
-            avg_w = (self._last_power_w + power_w) / 2.0
-            delta_kwh = (avg_w * dt_hours) / 1000.0
-            if delta_kwh >= 0:
-                self._accumulated_kwh += delta_kwh
+            dt = now - self._last_ts
+            if 0 < dt <= MAX_ENERGY_SAMPLE_GAP:
+                self._accumulated_kwh += integrate_power_delta_kwh(
+                    self._last_power_w, power_w, dt, MAX_ENERGY_SAMPLE_GAP
+                )
+            elif dt > MAX_ENERGY_SAMPLE_GAP:
+                _LOGGER.debug(
+                    "Vimar: energy sample gap %.0fs; skipping integration gap", dt
+                )
 
         self._last_power_w = power_w
         self._last_ts = now
@@ -157,7 +176,11 @@ class VimarEnergySensor(RestoreEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
-        return {"method": "trapezoidal"}
+        return {
+            "method": "trapezoidal",
+            "source": "Vimar Cloud instantaneous power",
+            "max_sample_gap_seconds": MAX_ENERGY_SAMPLE_GAP,
+        }
 
 
 class VimarThresholdSensor(SensorEntity):
@@ -178,6 +201,9 @@ class VimarThresholdSensor(SensorEntity):
 
     async def async_added_to_hass(self) -> None:
         self._client.register_state_callback(self._on_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        self._client.unregister_state_callback(self._on_update)
 
     @callback
     def _on_update(self, updated: list[int]) -> None:
@@ -211,6 +237,9 @@ class VimarLoadStateSensor(SensorEntity):
     async def async_added_to_hass(self) -> None:
         self._client.register_state_callback(self._on_update)
 
+    async def async_will_remove_from_hass(self) -> None:
+        self._client.unregister_state_callback(self._on_update)
+
     @callback
     def _on_update(self, updated: list[int]) -> None:
         if self._idsf in updated:
@@ -238,6 +267,9 @@ class VimarAutomationPowerSensor(SensorEntity):
 
     async def async_added_to_hass(self) -> None:
         self._client.register_state_callback(self._on_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        self._client.unregister_state_callback(self._on_update)
 
     @callback
     def _on_update(self, updated: list[int]) -> None:
@@ -281,6 +313,9 @@ class VimarAutomationEnergySensor(RestoreEntity, SensorEntity):
         self._last_ts = time.monotonic()
         self._client.register_state_callback(self._on_update)
 
+    async def async_will_remove_from_hass(self) -> None:
+        self._client.unregister_state_callback(self._on_update)
+
     @callback
     def _on_update(self, updated: list[int]) -> None:
         if self._idsf not in updated:
@@ -292,13 +327,21 @@ class VimarAutomationEnergySensor(RestoreEntity, SensorEntity):
             power_w = float(value)
         except (ValueError, TypeError):
             return
+        if not math.isfinite(power_w) or power_w < 0:
+            _LOGGER.warning("Vimar: ignoring invalid power value %r", value)
+            return
+
         now = time.monotonic()
         if self._last_power_w is not None and self._last_ts is not None:
-            dt_hours = (now - self._last_ts) / 3600.0
-            avg_w = (self._last_power_w + power_w) / 2.0
-            delta_kwh = (avg_w * dt_hours) / 1000.0
-            if delta_kwh >= 0:
-                self._accumulated_kwh += delta_kwh
+            dt = now - self._last_ts
+            if 0 < dt <= MAX_ENERGY_SAMPLE_GAP:
+                self._accumulated_kwh += integrate_power_delta_kwh(
+                    self._last_power_w, power_w, dt, MAX_ENERGY_SAMPLE_GAP
+                )
+            elif dt > MAX_ENERGY_SAMPLE_GAP:
+                _LOGGER.debug(
+                    "Vimar: automation energy sample gap %.0fs; skipping integration gap", dt
+                )
         self._last_power_w = power_w
         self._last_ts = now
         self.async_write_ha_state()

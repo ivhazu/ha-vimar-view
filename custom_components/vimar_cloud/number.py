@@ -99,7 +99,7 @@ async def async_setup_entry(
     # Energy manager — soglie di potenza
     idsf = client.idsf_energy_manager
     if idsf is not None:
-        em_info = energy_manager_device_info(entry, client, hass)
+        em_info = energy_manager_device_info(entry, client)
         entities.append(VimarThresholdNumber(
             client, idsf, "Imposta Soglia Alert", 0, em_info, f"{DOMAIN}_{idsf}_set_alert"))
         entities.append(VimarThresholdNumber(
@@ -108,7 +108,7 @@ async def async_setup_entry(
     # Termostati — setpoint avanzati di temperatura
     for idsf, device in client.devices.items():
         if device.get("device_type") == "thermostat":
-            dev_info = device_info_for_idsf(client, idsf, entry, hass)
+            dev_info = device_info_for_idsf(client, idsf, entry)
             for cfg in CLIMATE_SETPOINTS:
                 entities.append(
                     VimarClimateSetpointNumber(
@@ -139,6 +139,9 @@ class VimarThresholdNumber(NumberEntity):
 
     async def async_added_to_hass(self) -> None:
         self._client.register_state_callback(self._on_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        self._client.unregister_state_callback(self._on_update)
 
     @callback
     def _on_update(self, updated):
@@ -204,6 +207,9 @@ class VimarClimateSetpointNumber(NumberEntity):
 
     async def async_added_to_hass(self) -> None:
         self._client.register_state_callback(self._on_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        self._client.unregister_state_callback(self._on_update)
 
     @callback
     def _on_update(self, updated: list[int]) -> None:

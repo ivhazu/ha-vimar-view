@@ -64,10 +64,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Register gateway device first so via_device works for all children
     dev_reg = dr.async_get(hass)
-    dev_reg.async_get_or_create(
+    gateway_device = dev_reg.async_get_or_create(
         config_entry_id=entry.entry_id,
         **gateway_device_info(entry, client),
     )
+    client.gateway_device_id = gateway_device.id
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
