@@ -54,6 +54,8 @@ SFE_STATE_GLOBAL_THRESHOLD = "SFE_State_GlobalThreshold"
 SFE_CMD_GLOBAL_THRESHOLD = "SFE_Cmd_GlobalThreshold"
 SFE_CMD_LOADS_PRIORITY = "SFE_Cmd_LoadsPriority"
 SFE_CMD_TIMED_DYNAMIC_MODE = "SFE_Cmd_TimedDynamicMode"
+SFE_STATE_GLOBAL_ACTIVE_EXCHANGE = "SFE_State_GlobalActivePowerExchange"
+SFE_STATE_GLOBAL_ACTIVE_PRODUCT = "SFE_State_GlobalActivePowerProduct"
 
 # SFE types — load control
 SFE_STATE_LOAD_ID = "SFE_State_LoadId"
