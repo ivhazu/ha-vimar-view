@@ -21,6 +21,8 @@ from .api import VimarCloudClient
 from .const import (
     DOMAIN,
     SFE_STATE_GLOBAL_ACTIVE_POWER,
+    SFE_STATE_GLOBAL_ACTIVE_EXCHANGE,
+    SFE_STATE_GLOBAL_ACTIVE_PRODUCT,
     SFE_STATE_GLOBAL_THRESHOLD,
     SFE_STATE_LOAD,
     MAX_ENERGY_SAMPLE_GAP,
@@ -44,10 +46,36 @@ async def async_setup_entry(
 
         if dt == "energy_manager":
             em_info = energy_manager_device_info(entry, client)
-            entities.append(VimarPowerSensor(client, idsf, "Consumo Totale", em_info, f"{DOMAIN}_{idsf}_total_power"))
-            entities.append(VimarEnergySensor(client, idsf, "Consumo Totale kWh", em_info, f"{DOMAIN}_{idsf}_total_kwh"))
-            entities.append(VimarThresholdSensor(client, idsf, "Soglia Alert", 0, em_info, f"{DOMAIN}_{idsf}_threshold_alert"))
-            entities.append(VimarThresholdSensor(client, idsf, "Soglia Distacco", 1, em_info, f"{DOMAIN}_{idsf}_threshold_disconnect"))
+        
+            entities.append(VimarPowerSensor(
+                client, idsf, "Consumo Totale",
+                em_info, f"{DOMAIN}_{idsf}_total_power"
+            ))
+        
+            entities.append(VimarEnergySensor(
+                client, idsf, "Consumo Totale kWh",
+                em_info, f"{DOMAIN}_{idsf}_total_kwh"
+            ))
+        
+            entities.append(VimarGridPowerSensor(
+                client, idsf, "Scambio Rete",
+                em_info, f"{DOMAIN}_{idsf}_grid_power"
+            ))
+        
+            entities.append(VimarSolarPowerSensor(
+                client, idsf, "Produzione Fotovoltaica",
+                em_info, f"{DOMAIN}_{idsf}_solar_power"
+            ))
+        
+            entities.append(VimarThresholdSensor(
+                client, idsf, "Soglia Alert", 0,
+                em_info, f"{DOMAIN}_{idsf}_threshold_alert"
+            ))
+        
+            entities.append(VimarThresholdSensor(
+                client, idsf, "Soglia Distacco", 1,
+                em_info, f"{DOMAIN}_{idsf}_threshold_disconnect"
+            ))
 
         elif dt == "load_control":
             dev_info = device_info_for_idsf(client, idsf, entry)
@@ -99,7 +127,37 @@ class VimarPowerSensor(SensorEntity):
         except (ValueError, TypeError):
             return None
 
+class VimarGridPowerSensor(VimarPowerSensor):
+    """Potenza scambiata con la rete elettrica."""
 
+    @property
+    def native_value(self) -> float | None:
+        value = self._client.get_state(
+            self._idsf,
+            SFE_STATE_GLOBAL_ACTIVE_EXCHANGE
+        )
+
+        try:
+            return float(value) if value is not None else None
+        except (ValueError, TypeError):
+            return None
+
+
+class VimarSolarPowerSensor(VimarPowerSensor):
+    """Produzione fotovoltaica istantanea."""
+
+    @property
+    def native_value(self) -> float | None:
+        value = self._client.get_state(
+            self._idsf,
+            SFE_STATE_GLOBAL_ACTIVE_PRODUCT
+        )
+
+        try:
+            return float(value) if value is not None else None
+        except (ValueError, TypeError):
+            return None
+            
 class VimarEnergySensor(RestoreEntity, SensorEntity):
     """Energy sensor (kWh) — Riemann sum integral of power (W)."""
 
