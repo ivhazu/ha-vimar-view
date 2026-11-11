@@ -20,9 +20,12 @@ from .const import (
     CHANGE_OVER_COOLING,
     CHANGE_OVER_HEATING,
     DOMAIN,
+    HVAC_MODE_VIMAR_ABSENCE,
     HVAC_MODE_VIMAR_AUTO,
     HVAC_MODE_VIMAR_MANUAL,
     HVAC_MODE_VIMAR_OFF,
+    HVAC_MODE_VIMAR_PROTECTION,
+    HVAC_MODE_VIMAR_REDUCTION,
     HVAC_MODE_VIMAR_TIMED_MANUAL,
     OUT_STATUS_COOL,
     OUT_STATUS_HEAT,
@@ -39,7 +42,22 @@ _LOGGER = logging.getLogger(__name__)
 PRESET_SCHEDULE = "Programma"     # Auto — segue il programma settimanale
 PRESET_MANUAL = "Manuale"         # Timed manual — override temporaneo
 PRESET_PERMANENT = "Permanente"   # Manual — override manuale permanente
-PRESET_MODES = [PRESET_SCHEDULE, PRESET_MANUAL, PRESET_PERMANENT]
+PRESET_REDUCTION = "Riduzione"    # Reduction — setpoint di riduzione
+PRESET_ABSENCE = "Assenza"        # Absence — setpoint di assenza ("Modalità Economy" nell'app View)
+PRESET_PROTECTION = "Protezione"  # Protection — solo antigelo
+
+# Preset HA ↔ modo di funzionamento Vimar (SFE_State/Cmd_HVACMode).
+# "Off" non è un preset: è HVACMode.OFF.
+PRESET_TO_VIMAR_MODE = {
+    PRESET_SCHEDULE: HVAC_MODE_VIMAR_AUTO,
+    PRESET_MANUAL: HVAC_MODE_VIMAR_TIMED_MANUAL,
+    PRESET_PERMANENT: HVAC_MODE_VIMAR_MANUAL,
+    PRESET_REDUCTION: HVAC_MODE_VIMAR_REDUCTION,
+    PRESET_ABSENCE: HVAC_MODE_VIMAR_ABSENCE,
+    PRESET_PROTECTION: HVAC_MODE_VIMAR_PROTECTION,
+}
+VIMAR_MODE_TO_PRESET = {mode: preset for preset, mode in PRESET_TO_VIMAR_MODE.items()}
+PRESET_MODES = list(PRESET_TO_VIMAR_MODE)
 
 
 async def async_setup_entry(
@@ -143,18 +161,12 @@ class VimarClimate(ClimateEntity):
 
     @property
     def preset_mode(self) -> str | None:
-        """Preset attivo.
+        """Preset attivo, cioè il modo di funzionamento Vimar (vedi PRESET_TO_VIMAR_MODE).
 
-        - Auto          → Programma   (segue il programma settimanale)
-        - Timed manual  → Manuale     (override temporaneo)
-        - Manual        → Permanente  (override manuale permanente)
+        Con il termostato in Off, o con un modo sconosciuto, non c'è preset.
         """
         mode = self._client.get_state(self._idsf, SFE_STATE_HVAC_MODE)
-        if mode == HVAC_MODE_VIMAR_TIMED_MANUAL:
-            return PRESET_MANUAL
-        if mode == HVAC_MODE_VIMAR_MANUAL:
-            return PRESET_PERMANENT
-        return PRESET_SCHEDULE
+        return VIMAR_MODE_TO_PRESET.get(mode)
 
     # ─── Comandi ─────────────────────────────────────────────────────────────
 
@@ -186,15 +198,10 @@ class VimarClimate(ClimateEntity):
         await self._client.set_climate_temperature(self._idsf, temp)
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
-        """Imposta il preset.
+        """Imposta il preset inviando il modo Vimar corrispondente (SFE_Cmd_HVACMode).
 
-        - Programma  → SFE_Cmd_HVACMode = "Auto"
-        - Manuale    → SFE_Cmd_HVACMode = "Timed manual"
-        - Permanente → SFE_Cmd_HVACMode = "Manual"
+        La stagione (ChangeOverMode) non viene toccata: Riduzione e Assenza
+        esistono anche in raffreddamento.
         """
-        if preset_mode == PRESET_MANUAL:
-            await self._client.set_climate_hvac_mode(self._idsf, HVAC_MODE_VIMAR_TIMED_MANUAL)
-        elif preset_mode == PRESET_PERMANENT:
-            await self._client.set_climate_hvac_mode(self._idsf, HVAC_MODE_VIMAR_MANUAL)
-        else:
-            await self._client.set_climate_hvac_mode(self._idsf, HVAC_MODE_VIMAR_AUTO)
+        vimar_mode = PRESET_TO_VIMAR_MODE.get(preset_mode, HVAC_MODE_VIMAR_AUTO)
+        await self._client.set_climate_hvac_mode(self._idsf, vimar_mode)

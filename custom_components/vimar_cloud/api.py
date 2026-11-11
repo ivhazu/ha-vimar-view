@@ -25,8 +25,11 @@ from .const import (
     FUNC_KEEPALIVE,
     FUNC_REGISTER,
     FUNC_SFDISCOVERY,
+    HVAC_MODE_VIMAR_ABSENCE,
     HVAC_MODE_VIMAR_AUTO,
     HVAC_MODE_VIMAR_OFF,
+    HVAC_MODE_VIMAR_PROTECTION,
+    HVAC_MODE_VIMAR_REDUCTION,
     HVAC_MODE_VIMAR_TIMED_MANUAL,
     KEEPALIVE_INTERVAL,
     HTTP_TIMEOUT_SECONDS,
@@ -36,6 +39,11 @@ from .const import (
     SFE_CMD_AMBIENT_SETPOINT,
     SFE_CMD_BRIGHTNESS,
     SFE_CMD_CHANGE_OVER_MODE,
+    SFE_CMD_COOL_ABSENCE_SETPOINT,
+    SFE_CMD_COOL_REDUCTION_SETPOINT,
+    SFE_CMD_HEAT_ABSENCE_SETPOINT,
+    SFE_CMD_HEAT_PROTECTION_SETPOINT,
+    SFE_CMD_HEAT_REDUCTION_SETPOINT,
     SFE_CMD_EXECUTE,
     SFE_CMD_HVAC_MODE,
     SFE_CMD_LOAD,
@@ -43,6 +51,7 @@ from .const import (
     SFE_CMD_SHUTTER,
     SFE_CMD_TIMED_DYNAMIC_MODE,
     SFE_STATE_BRIGHTNESS,
+    SFE_STATE_CHANGE_OVER_MODE,
     SFE_STATE_GLOBAL_ACTIVE_POWER,
     SFE_STATE_GLOBAL_THRESHOLD,
     SFE_STATE_HVAC_MODE,
@@ -661,6 +670,7 @@ class VimarCloudClient:
                 sfetype = element.get("sfetype")
                 value = element.get("value")
                 if sfetype and value is not None:
+                    _LOGGER.debug("Vimar: status idsf=%s %s=%r", idsf, sfetype, value)
                     self.device_states[target_idsf][sfetype] = value
                     self.device_states[idsf][sfetype] = value
 
@@ -751,11 +761,32 @@ class VimarCloudClient:
     async def set_climate_change_over(self, idsf: int, change_over: str) -> None:
         await self._send_command([{"idsf": idsf, "sfetype": SFE_CMD_CHANGE_OVER_MODE, "value": change_over}])
 
+    # Modi che usano un setpoint proprio: (comando riscaldamento, comando raffreddamento).
+    _MODE_SETPOINT_CMDS = {
+        HVAC_MODE_VIMAR_REDUCTION: (SFE_CMD_HEAT_REDUCTION_SETPOINT, SFE_CMD_COOL_REDUCTION_SETPOINT),
+        HVAC_MODE_VIMAR_ABSENCE: (SFE_CMD_HEAT_ABSENCE_SETPOINT, SFE_CMD_COOL_ABSENCE_SETPOINT),
+        HVAC_MODE_VIMAR_PROTECTION: (SFE_CMD_HEAT_PROTECTION_SETPOINT, None),
+    }
+
     async def set_climate_temperature(self, idsf: int, temperature: float) -> None:
+        """Imposta la temperatura target nel modo attivo.
+
+        - Auto: passa a Timed manual e scrive AmbientSetpoint (come l'app).
+        - Riduzione / Assenza / Protezione: scrive il setpoint del modo
+          (Heat*/Cool* in base a ChangeOverMode); il termostato aggiorna da sé
+          il setpoint corrente. AmbientSetpoint in questi modi varrebbe solo
+          fino al prossimo cambio di modo.
+        - Altri modi: AmbientSetpoint.
+        """
         current_mode = self.get_state(idsf, SFE_STATE_HVAC_MODE)
         if current_mode == HVAC_MODE_VIMAR_AUTO:
             await self.set_climate_hvac_mode(idsf, HVAC_MODE_VIMAR_TIMED_MANUAL)
-        await self._send_command([{"idsf": idsf, "sfetype": SFE_CMD_AMBIENT_SETPOINT, "value": str(temperature)}])
+        sfetype = SFE_CMD_AMBIENT_SETPOINT
+        mode_cmds = self._MODE_SETPOINT_CMDS.get(current_mode)
+        if mode_cmds:
+            cooling = self.get_state(idsf, SFE_STATE_CHANGE_OVER_MODE) == CHANGE_OVER_COOLING
+            sfetype = mode_cmds[1 if cooling else 0] or SFE_CMD_AMBIENT_SETPOINT
+        await self._send_command([{"idsf": idsf, "sfetype": sfetype, "value": str(temperature)}])
 
     async def set_climate_setpoint(self, idsf: int, cmd_sfetype: str, value: float) -> None:
         await self._send_command([{"idsf": idsf, "sfetype": cmd_sfetype, "value": str(value)}])

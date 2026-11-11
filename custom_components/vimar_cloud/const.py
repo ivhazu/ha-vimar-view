@@ -111,6 +111,9 @@ HVAC_MODE_VIMAR_OFF = "Off"
 HVAC_MODE_VIMAR_AUTO = "Auto"
 HVAC_MODE_VIMAR_TIMED_MANUAL = "Timed manual"
 HVAC_MODE_VIMAR_MANUAL = "Manual"  # manuale permanente
+HVAC_MODE_VIMAR_REDUCTION = "Reduction"    # riduzione (setpoint *ReductionSetpoint)
+HVAC_MODE_VIMAR_ABSENCE = "Absence"        # assenza (setpoint *AbsenceSetpoint)
+HVAC_MODE_VIMAR_PROTECTION = "Protection"  # protezione antigelo (HeatProtectionSetpoint)
 
 # Change-over mode values (Vimar)
 CHANGE_OVER_HEATING = "Heating"

@@ -34,7 +34,7 @@ Utilizza il protocollo WebSocket proprietario Vimar (`prod.vimar.cloud`) con aut
 | Attuatore (modalità presa) | **14593\*** | `switch` + `sensor` | On/Off, Potenza W, kWh |
 | Energy Meter | **02963** | `sensor` + `number` | Consumo totale W/kWh, Soglia alert/distacco |
 | Tapparella connessa | **30804** | `cover` | Apri, Chiudi, Stop, Posizione % |
-| Termostato zona clima | **02912** | `climate` + `number` | On/Off, Riscaldamento/Raffreddamento, Temperatura, Preset, Setpoint avanzati |
+| Termostato zona clima | **02912** | `climate` + `number` | On/Off, Riscaldamento/Raffreddamento, Temperatura, Preset (tutti i modi del termostato), Setpoint avanzati |
 
 ---
 
@@ -83,11 +83,19 @@ Utilizza il protocollo WebSocket proprietario Vimar (`prod.vimar.cloud`) con aut
 - 🔥 **Riscaldamento** — modalità invernale attiva
 - ❄️ **Raffreddamento** — modalità estiva attiva
 
-**Preset disponibili:**
-- **Programma** — segue il programma settimanale impostato sull'app Vimar
-- **Manuale** — override manuale temporaneo della temperatura
+**Preset disponibili** (corrispondono ai modi di funzionamento del termostato):
+- **Programma** — segue il programma settimanale impostato sull'app Vimar (modo *Automatico*)
+- **Manuale** — override manuale temporaneo della temperatura (modo *Manuale a tempo*, durata impostata sul termostato)
+- **Permanente** — temperatura fissa finché non la cambi (modo *Manuale*)
+- **Riduzione** — mantiene il setpoint di riduzione (`number.<nome>_riscaldamento_riduzione`)
+- **Assenza** — mantiene il setpoint di assenza (`number.<nome>_riscaldamento_assenza`); nell'app View si chiama *Modalità Economy*
+- **Protezione** — mantiene solo la protezione antigelo (`number.<nome>_riscaldamento_protezione_antigelo`)
 
 > ℹ️ **Nota**: la modifica dei programmi orari settimanali non è supportata direttamente in HA (usare l'app Vimar). Il preset *Manuale* permette comunque di sovrascrivere temporaneamente la temperatura target.
+>
+> ⚠️ **Off** spegne completamente il termostato: nessuna regolazione, nemmeno l'antigelo. Per lasciare attiva la protezione antigelo usa il preset *Protezione*. Con il termostato spento il preset è vuoto.
+>
+> 🌡️ Cambiare la temperatura target mentre è attivo *Riduzione*, *Assenza* o *Protezione* aggiorna il setpoint di quel modo (le stesse entità `number.*`), così il valore resta anche dopo un cambio di modo.
 
 #### Per ogni Scenario
 | Entità | Tipo | Descrizione |
@@ -225,7 +233,7 @@ Uses Vimar's proprietary WebSocket protocol (`prod.vimar.cloud`) with OAuth2 PKC
 | Actuator (outlet mode) | **14593\*** | `switch` + `sensor` | On/Off, Power W, kWh |
 | Energy Meter | **02963** | `sensor` + `number` | Total power W/kWh, Alert/disconnect thresholds |
 | Connected shutter | **30804** | `cover` | Open, Close, Stop, Position % |
-| Climate zone thermostat | **02912** | `climate` + `number` | On/Off, Heat/Cool, Temperature, Presets, Advanced setpoints |
+| Climate zone thermostat | **02912** | `climate` + `number` | On/Off, Heat/Cool, Temperature, Presets (all thermostat modes), Advanced setpoints |
 
 ---
 
@@ -275,11 +283,19 @@ Uses Vimar's proprietary WebSocket protocol (`prod.vimar.cloud`) with OAuth2 PKC
 - 🔥 **Heat** — winter / heating mode active
 - ❄️ **Cool** — summer / cooling mode active
 
-**Available presets:**
-- **Programma** — follows the weekly schedule set in the Vimar app
-- **Manuale** — temporary manual temperature override
+**Available presets** (they map to the thermostat operating modes):
+- **Programma** — follows the weekly schedule set in the Vimar app (*Auto* mode)
+- **Manuale** — temporary manual temperature override (*Timed manual* mode, duration set on the thermostat)
+- **Permanente** — fixed temperature until you change it (*Manual* mode)
+- **Riduzione** — holds the reduction setpoint (`number.<name>_heat_reduction`)
+- **Assenza** — holds the away setpoint (`number.<name>_heat_absence`); the View app calls it *Modalità Economy*
+- **Protezione** — frost protection only (`number.<name>_heat_protection`)
 
 > ℹ️ **Note**: editing weekly schedules is not supported directly in HA (use the Vimar app). The *Manuale* preset allows a temporary override of the target temperature at any time.
+>
+> ⚠️ **Off** switches the thermostat completely off: no regulation at all, not even frost protection. To keep frost protection active use the *Protezione* preset. While the thermostat is off the preset is empty.
+>
+> 🌡️ Changing the target temperature while *Riduzione*, *Assenza* or *Protezione* is active updates that mode's setpoint (the same `number.*` entities), so the value survives mode changes.
 
 #### For each Scene Activator
 | Entity | Type | Description |
