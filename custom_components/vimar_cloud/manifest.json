@@ -1,7 +1,7 @@
 {
   "domain": "vimar_cloud",
   "name": "Vimar View Cloud",
-  "version": "1.9.2",
+  "version": "1.9.3",
   "documentation": "https://github.com/ivhazu/ha-vimar-view",
   "issue_tracker": "https://github.com/ivhazu/ha-vimar-view/issues",
   "dependencies": [],
