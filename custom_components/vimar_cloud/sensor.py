@@ -5,6 +5,7 @@ import json
 import math
 import logging
 import time
+from datetime import datetime, timezone
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -16,6 +17,7 @@ from homeassistant.const import UnitOfEnergy, UnitOfPower
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.util import dt as dt_util
 
 from .api import VimarCloudClient
 from .const import (
@@ -26,6 +28,8 @@ from .const import (
     SFE_STATE_GLOBAL_THRESHOLD,
     SFE_STATE_LOAD,
     MAX_ENERGY_SAMPLE_GAP,
+    ENERGY_TELEMETRY_IDS,
+    SFE_STATE_TELEMETRY_G,
 )
 from .device_info import device_info_for_idsf, energy_manager_device_info
 from .energy import integrate_power_delta_kwh
@@ -43,46 +47,43 @@ async def async_setup_entry(
 
     for idsf, device in client.devices.items():
         dt = device.get("device_type")
-
         if dt == "energy_manager":
             em_info = energy_manager_device_info(entry, client)
-        
+
             entities.append(VimarPowerSensor(
                 client, idsf, "Consumo Totale",
                 em_info, f"{DOMAIN}_{idsf}_total_power"
             ))
-        
             entities.append(VimarEnergySensor(
                 client, idsf, "Consumo Totale kWh",
                 em_info, f"{DOMAIN}_{idsf}_total_kwh"
             ))
-        
             entities.append(VimarGridPowerSensor(
                 client, idsf, "Scambio Rete",
                 em_info, f"{DOMAIN}_{idsf}_grid_power"
             ))
-        
             entities.append(VimarSolarPowerSensor(
                 client, idsf, "Produzione Fotovoltaica",
                 em_info, f"{DOMAIN}_{idsf}_solar_power"
             ))
-        
             entities.append(VimarThresholdSensor(
                 client, idsf, "Soglia Alert", 0,
                 em_info, f"{DOMAIN}_{idsf}_threshold_alert"
             ))
-        
             entities.append(VimarThresholdSensor(
                 client, idsf, "Soglia Distacco", 1,
                 em_info, f"{DOMAIN}_{idsf}_threshold_disconnect"
             ))
-
+            for energy_idsf, energy_name in ENERGY_TELEMETRY_IDS.items():
+                entities.append(VimarDailyTelemetryEnergySensor(
+                    client, energy_idsf, energy_name,
+                    em_info, f"{DOMAIN}_{entry.entry_id}_{energy_idsf}_daily_energy"
+                ))
         elif dt == "load_control":
             dev_info = device_info_for_idsf(client, idsf, entry)
             entities.append(VimarPowerSensor(client, idsf, "Potenza", dev_info, f"{DOMAIN}_{idsf}_power"))
             entities.append(VimarEnergySensor(client, idsf, "Energia", dev_info, f"{DOMAIN}_{idsf}_kwh"))
             entities.append(VimarLoadStateSensor(client, idsf, dev_info, f"{DOMAIN}_{idsf}_load_state"))
-
         elif dt == "automation_switch":
             dev_info = device_info_for_idsf(client, idsf, entry)
             entities.append(VimarAutomationPowerSensor(client, idsf, dev_info, entry))
@@ -90,8 +91,6 @@ async def async_setup_entry(
 
     async_add_entities(entities)
 
-
-# ─── Sensor entities ─────────────────────────────────────────────────────────
 
 class VimarPowerSensor(SensorEntity):
     """Instantaneous power sensor (W)."""
@@ -127,16 +126,13 @@ class VimarPowerSensor(SensorEntity):
         except (ValueError, TypeError):
             return None
 
+
 class VimarGridPowerSensor(VimarPowerSensor):
     """Potenza scambiata con la rete elettrica."""
 
     @property
     def native_value(self) -> float | None:
-        value = self._client.get_state(
-            self._idsf,
-            SFE_STATE_GLOBAL_ACTIVE_EXCHANGE
-        )
-
+        value = self._client.get_state(self._idsf, SFE_STATE_GLOBAL_ACTIVE_EXCHANGE)
         try:
             return float(value) if value is not None else None
         except (ValueError, TypeError):
@@ -148,16 +144,13 @@ class VimarSolarPowerSensor(VimarPowerSensor):
 
     @property
     def native_value(self) -> float | None:
-        value = self._client.get_state(
-            self._idsf,
-            SFE_STATE_GLOBAL_ACTIVE_PRODUCT
-        )
-
+        value = self._client.get_state(self._idsf, SFE_STATE_GLOBAL_ACTIVE_PRODUCT)
         try:
             return float(value) if value is not None else None
         except (ValueError, TypeError):
             return None
-            
+
+
 class VimarEnergySensor(RestoreEntity, SensorEntity):
     """Energy sensor (kWh) — Riemann sum integral of power (W)."""
 
@@ -181,7 +174,6 @@ class VimarEnergySensor(RestoreEntity, SensorEntity):
         if last_state and last_state.state not in ("unknown", "unavailable", None):
             try:
                 restored = float(last_state.state)
-                # Sanity check: reset if value is clearly corrupted (>1 million kWh)
                 if math.isfinite(restored) and 0.0 <= restored <= 1_000_000.0:
                     self._accumulated_kwh = restored
                     _LOGGER.debug("Vimar: restored %s = %.4f kWh", self._attr_unique_id, self._accumulated_kwh)
@@ -190,7 +182,6 @@ class VimarEnergySensor(RestoreEntity, SensorEntity):
                     self._accumulated_kwh = 0.0
             except (ValueError, TypeError):
                 self._accumulated_kwh = 0.0
-
         self._last_ts = time.monotonic()
         self._client.register_state_callback(self._on_update)
 
@@ -201,24 +192,17 @@ class VimarEnergySensor(RestoreEntity, SensorEntity):
     def _on_update(self, updated: list[int]) -> None:
         if self._idsf not in updated:
             return
-
         power_w_raw = self._client.get_state(self._idsf, SFE_STATE_GLOBAL_ACTIVE_POWER)
         if power_w_raw is None:
             return
-
         try:
             power_w = float(power_w_raw)
         except (ValueError, TypeError):
             return
-
-        # Vimar exposes instantaneous power only. We integrate locally, but never
-        # invent consumption across long cloud/WebSocket gaps.
         if not math.isfinite(power_w) or power_w < 0:
             _LOGGER.warning("Vimar: ignoring invalid power value %r", power_w_raw)
             return
-
         now = time.monotonic()
-
         if self._last_power_w is not None and self._last_ts is not None:
             dt = now - self._last_ts
             if 0 < dt <= MAX_ENERGY_SAMPLE_GAP:
@@ -226,10 +210,7 @@ class VimarEnergySensor(RestoreEntity, SensorEntity):
                     self._last_power_w, power_w, dt, MAX_ENERGY_SAMPLE_GAP
                 )
             elif dt > MAX_ENERGY_SAMPLE_GAP:
-                _LOGGER.debug(
-                    "Vimar: energy sample gap %.0fs; skipping integration gap", dt
-                )
-
+                _LOGGER.debug("Vimar: energy sample gap %.0fs; skipping integration gap", dt)
         self._last_power_w = power_w
         self._last_ts = now
         self.async_write_ha_state()
@@ -244,6 +225,82 @@ class VimarEnergySensor(RestoreEntity, SensorEntity):
             "method": "trapezoidal",
             "source": "Vimar Cloud instantaneous power",
             "max_sample_gap_seconds": MAX_ENERGY_SAMPLE_GAP,
+        }
+
+
+class VimarDailyTelemetryEnergySensor(SensorEntity):
+    """Energia giornaliera rilevata dalla telemetria oraria del cloud Vimar."""
+
+    _attr_has_entity_name = True
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_should_poll = False
+
+    def __init__(self, client: VimarCloudClient, idsf: int, name: str, device_info, unique_id: str) -> None:
+        self._client = client
+        self._idsf = idsf
+        self._attr_name = name
+        self._attr_unique_id = unique_id
+        self._attr_device_info = device_info
+
+    async def async_added_to_hass(self) -> None:
+        self._client.register_state_callback(self._on_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        self._client.unregister_state_callback(self._on_update)
+
+    @callback
+    def _on_update(self, updated: list[int]) -> None:
+        if self._idsf in updated:
+            self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> float | None:
+        raw = self._client.get_state(self._idsf, SFE_STATE_TELEMETRY_G)
+        received_at = self._client.energy_snapshot_received_at.get(self._idsf)
+        if raw is None or received_at is None:
+            return None
+        now = dt_util.now()
+        snapshot_time = dt_util.as_local(datetime.fromtimestamp(received_at, timezone.utc))
+        if snapshot_time.date() != now.date():
+            return None
+        try:
+            telemetry = json.loads(raw) if isinstance(raw, str) else raw
+            values = telemetry["data"]
+            if not isinstance(values, list):
+                return None
+            # G[0] e l'ora corrente, G[1] la precedente, ecc.
+            count = snapshot_time.hour + 1
+            today = values[:count]
+            
+            if len(today) != count:
+                return None
+            
+            # Subito dopo mezzanotte Vimar può restituire None
+            # per la prima ora, prima che sia disponibile una misura.
+            if count == 1 and today[0] is None:
+                return 0.0
+            
+            # Nelle altre ore i dati mancanti non vengono
+            # interpretati automaticamente come zero.
+            if any(v is None for v in today):
+                return None
+    
+            numbers = [float(v) for v in today]
+            if any(not math.isfinite(v) or v < 0 for v in numbers):
+                return None
+            return round(sum(numbers) / 1000, 3)
+        except (ValueError, TypeError, KeyError, IndexError, AttributeError, OverflowError):
+            return None
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {
+            "source": "Vimar Cloud BigData",
+            "telemetry_type": SFE_STATE_TELEMETRY_G,
+            "bigdata_idsf": self._idsf,
+            "calculation": "sum_hourly_values",
         }
 
 
@@ -400,7 +457,6 @@ class VimarAutomationEnergySensor(RestoreEntity, SensorEntity):
         if not math.isfinite(power_w) or power_w < 0:
             _LOGGER.warning("Vimar: ignoring invalid power value %r", value)
             return
-
         now = time.monotonic()
         if self._last_power_w is not None and self._last_ts is not None:
             dt = now - self._last_ts
@@ -409,9 +465,7 @@ class VimarAutomationEnergySensor(RestoreEntity, SensorEntity):
                     self._last_power_w, power_w, dt, MAX_ENERGY_SAMPLE_GAP
                 )
             elif dt > MAX_ENERGY_SAMPLE_GAP:
-                _LOGGER.debug(
-                    "Vimar: automation energy sample gap %.0fs; skipping integration gap", dt
-                )
+                _LOGGER.debug("Vimar: automation energy sample gap %.0fs; skipping integration gap", dt)
         self._last_power_w = power_w
         self._last_ts = now
         self.async_write_ha_state()
