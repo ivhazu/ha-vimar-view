@@ -7,7 +7,6 @@ VIMAR_CLOUD_HOST = "prod.vimar.cloud"
 VIMAR_AUTH_URL = f"https://{VIMAR_CLOUD_HOST}/auth/realms/vimaruser/protocol/openid-connect/token"
 VIMAR_OAUTH_AUTH_URL = f"https://{VIMAR_CLOUD_HOST}/auth/realms/vimaruser/protocol/openid-connect/auth"
 VIMAR_WS_URL = f"wss://{VIMAR_CLOUD_HOST}/wssmqtt/deviceproxy"
-
 # OAuth2
 VIMAR_CLIENT_ID = "mobile-user-view2"
 VIMAR_REDIRECT_URI = "com.prova.app:/oauth2redirect/example-provide"
@@ -24,7 +23,6 @@ KEEPALIVE_INTERVAL = 25
 MAX_ENERGY_SAMPLE_GAP = 300
 # Network timeouts for authentication/token operations.
 HTTP_TIMEOUT_SECONDS = 30
-
 # SFE types — shutters
 SFE_STATE_SHUTTER = "SFE_State_Shutter"
 SFE_CMD_SHUTTER = "SFE_Cmd_Shutter"
@@ -40,13 +38,11 @@ SFE_CMD_DOWN_KEY = "SFE_Cmd_DownKey_ActiveScene"
 SFE_STATE_EXECUTED = "SFE_State_Executed"
 SFE_STATE_LOCKED = "SFE_State_Locked"
 SFE_STATE_SF_LIST = "SFE_State_SFList"
-
 # SFE types — lights
 SFE_STATE_ONOFF = "SFE_State_OnOff"
 SFE_STATE_BRIGHTNESS = "SFE_State_Brightness"
 SFE_CMD_ONOFF = "SFE_Cmd_OnOff"
 SFE_CMD_BRIGHTNESS = "SFE_Cmd_Brightness"
-
 # SFE types — energy
 SFE_STATE_GLOBAL_ACTIVE_POWER = "SFE_State_GlobalActivePowerConsumption"
 SFE_STATE_LOADS_PRIORITY = "SFE_State_LoadsPriority"
@@ -56,6 +52,22 @@ SFE_CMD_LOADS_PRIORITY = "SFE_Cmd_LoadsPriority"
 SFE_CMD_TIMED_DYNAMIC_MODE = "SFE_Cmd_TimedDynamicMode"
 SFE_STATE_GLOBAL_ACTIVE_EXCHANGE = "SFE_State_GlobalActivePowerExchange"
 SFE_STATE_GLOBAL_ACTIVE_PRODUCT = "SFE_State_GlobalActivePowerProduct"
+
+# Telemetrie energetiche Vimar BigData: ID verificati sull'impianto di test.
+SFE_STATE_TELEMETRY_G = "SFE_State_Telemetry_G"
+ENERGY_TELEMETRY_IDS = {
+    90000: "Consumo casa giornaliero",
+    90001: "Immissione rete giornaliera",
+    90002: "Produzione fotovoltaica giornaliera",
+    90003: "Autoconsumo giornaliero",
+    90004: "Prelievo rete giornaliero",
+}
+ENERGY_REFRESH_MIN_SECONDS = 600  # Minimo 10 minuti, solo su evento.
+ENERGY_TRIGGER_SFETYPES = frozenset({
+    "SFE_State_GlobalActivePowerConsumption",
+    "SFE_State_GlobalActivePowerExchange",
+    "SFE_State_GlobalActivePowerProduct",
+})
 
 # SFE types — load control
 SFE_STATE_LOAD_ID = "SFE_State_LoadId"
@@ -69,7 +81,6 @@ LOAD_STATE_AUTO_ON = "Auto on"
 LOAD_STATE_AUTO_OFF = "Auto off"
 LOAD_STATE_FORCED_ON = "Forced on"
 LOAD_STATE_FORCED_OFF = "Forced off"
-
 # Message functions
 FUNC_ATTACH = "attach"
 FUNC_DETACH = "detach"
@@ -83,7 +94,6 @@ FUNC_KEEPALIVE = "keepalive"
 # SF categories
 SF_CATEGORY_PLANT = "Plant"
 SF_CATEGORY_BIGDATA = "BigData"
-
 # SFE types — climate / thermostat
 SFE_STATE_AMBIENT_TEMPERATURE = "SFE_State_AmbientTemperature"
 SFE_STATE_AMBIENT_SETPOINT = "SFE_State_AmbientSetpoint"
@@ -93,21 +103,18 @@ SFE_STATE_OUT_STATUS = "SFE_State_OutStatus"
 SFE_CMD_HVAC_MODE = "SFE_Cmd_HVACMode"
 SFE_CMD_AMBIENT_SETPOINT = "SFE_Cmd_AmbientSetpoint"
 SFE_CMD_CHANGE_OVER_MODE = "SFE_Cmd_ChangeOverMode"
-
 # Thermostat advanced setpoints — states
 SFE_STATE_HEAT_REDUCTION_SETPOINT = "SFE_State_HeatReductionSetpoint"
 SFE_STATE_HEAT_PROTECTION_SETPOINT = "SFE_State_HeatProtectionSetpoint"
 SFE_STATE_HEAT_ABSENCE_SETPOINT = "SFE_State_HeatAbsenceSetpoint"
 SFE_STATE_COOL_REDUCTION_SETPOINT = "SFE_State_CoolReductionSetpoint"
 SFE_STATE_COOL_ABSENCE_SETPOINT = "SFE_State_CoolAbsenceSetpoint"
-
 # Thermostat advanced setpoints — commands
 SFE_CMD_HEAT_REDUCTION_SETPOINT = "SFE_Cmd_HeatReductionSetpoint"
 SFE_CMD_HEAT_PROTECTION_SETPOINT = "SFE_Cmd_HeatProtectionSetpoint"
 SFE_CMD_HEAT_ABSENCE_SETPOINT = "SFE_Cmd_HeatAbsenceSetpoint"
 SFE_CMD_COOL_REDUCTION_SETPOINT = "SFE_Cmd_CoolReductionSetpoint"
 SFE_CMD_COOL_ABSENCE_SETPOINT = "SFE_Cmd_CoolAbsenceSetpoint"
-
 # HVAC mode values (Vimar)
 HVAC_MODE_VIMAR_OFF = "Off"
 HVAC_MODE_VIMAR_AUTO = "Auto"
@@ -122,7 +129,6 @@ CHANGE_OVER_COOLING = "Cooling"
 OUT_STATUS_OFF = "Off"
 OUT_STATUS_HEAT = "Heat"
 OUT_STATUS_COOL = "Cool"
-
 # sstype → model label (shown in HA device info)
 SSTYPE_LABELS = {
     "SS_Light_Switch": "Switch",
