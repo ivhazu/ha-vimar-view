@@ -15,6 +15,10 @@ from typing import Any, Callable
 import aiohttp
 
 from .const import (
+    ENERGY_TELEMETRY_IDS,
+    ENERGY_REFRESH_MIN_SECONDS,
+    ENERGY_TRIGGER_SFETYPES,
+    SFE_STATE_TELEMETRY_G,
     CHANGE_OVER_COOLING,
     CHANGE_OVER_HEATING,
     FUNC_ATTACH,
@@ -135,6 +139,10 @@ class VimarCloudClient:
         self._token_update_callback: Callable[[str], None] | None = None
         self._running = False
         self._keepalive_task: asyncio.Task | None = None
+        self._energy_refresh_task: asyncio.Task | None = None
+        self._last_energy_request_at: float | None = None
+        self._energy_ready = False
+        self.energy_snapshot_received_at: dict[int, float] = {}
         self._discovery_callback: Callable | None = None
         self._token_lock = asyncio.Lock()
         self._pending_requests: dict[str, asyncio.Future[dict[str, Any]]] = {}
@@ -422,7 +430,7 @@ class VimarCloudClient:
         msg_type = msg.get("type")
         function = msg.get("function")
         error = msg.get("error", 0)
-
+        
         if error != 0:
             _LOGGER.error("Vimar: error in %s: %s", function, msg.get("result"))
             if msg_type == "response":
@@ -465,9 +473,18 @@ class VimarCloudClient:
             if result and isinstance(result[0], dict) and "sf" in result[0]:
                 await self._process_plant_discovery(result)
             else:
-                _LOGGER.debug("Vimar: BigData discovery: %s", json.dumps(result)[:500])
+                _LOGGER.debug("Vimar: BigData discovery received")
+                # Test: a single GETSTATUS containing all five hourly series.
+                self._energy_ready = True
+                await self._request_energy_snapshot()
 
         elif function == FUNC_GETSTATUS:
+            bigdata_ids = {
+                item.get("idsf") for item in result
+                if isinstance(item, dict) and item.get("idsf") in ENERGY_TELEMETRY_IDS
+            }
+            if bigdata_ids:
+                _LOGGER.debug("Vimar energy: risposta getstatus, ID ricevuti: %s", sorted(bigdata_ids))
             await self._process_status_update(result)
 
         elif function in (FUNC_REGISTER, FUNC_KEEPALIVE, FUNC_DOACTION):
@@ -475,7 +492,51 @@ class VimarCloudClient:
 
     async def _handle_push(self, function: str, msg: dict) -> None:
         if function == FUNC_CHANGESTATUS:
-            await self._process_status_update(msg.get("args", []))
+            args = msg.get("args", [])
+            await self._process_status_update(args)
+            if self._energy_ready and self._is_energy_trigger(args):
+                self._maybe_schedule_energy_refresh()
+
+    @staticmethod
+    def _is_energy_trigger(args: list) -> bool:
+        'Only the three instantaneous power fields trigger BigData requests.'
+        if not isinstance(args, list):
+            return False
+        return any(
+            isinstance(item, dict)
+            and any(
+                isinstance(element, dict)
+                and element.get("sfetype") in ENERGY_TRIGGER_SFETYPES
+                for element in item.get("elements", [])
+                if isinstance(item.get("elements", []), list)
+            )
+            for item in args
+        )
+
+    async def _request_energy_snapshot(self) -> None:
+        'Send one batch getstatus; only on start or when a power event qualifies.'
+        if not self._energy_ready or self._ws is None or self._ws.closed or not self._session_token:
+            return
+        request = [
+            {"idsf": idsf, "sfetype": [SFE_STATE_TELEMETRY_G]}
+            for idsf in ENERGY_TELEMETRY_IDS
+        ]
+        try:
+            await self._send_request(FUNC_GETSTATUS, request)
+            self._last_energy_request_at = time.monotonic()
+            _LOGGER.debug("Vimar energy: richiesta batch inviata per %d ID", len(request))
+        except asyncio.CancelledError:
+            raise
+        except Exception as err:
+            _LOGGER.warning("Vimar energy: batch getstatus failed: %s", err)
+
+    def _maybe_schedule_energy_refresh(self) -> None:
+        if self._energy_refresh_task is not None and not self._energy_refresh_task.done():
+            return
+        if (self._last_energy_request_at is not None
+            and time.monotonic() - self._last_energy_request_at < ENERGY_REFRESH_MIN_SECONDS):
+            return
+        self._energy_refresh_task = asyncio.create_task(self._request_energy_snapshot())
 
     async def _process_plant_discovery(self, result: list) -> None:
         sf_list: list[dict] = []
@@ -640,7 +701,8 @@ class VimarCloudClient:
         updated_idsf: list[int] = []
         if not isinstance(args, list):
             return
-
+        
+        
         for item in args:
             if not isinstance(item, dict):
                 continue
@@ -660,7 +722,10 @@ class VimarCloudClient:
                     continue
                 sfetype = element.get("sfetype")
                 value = element.get("value")
+                
                 if sfetype and value is not None:
+                    if idsf in ENERGY_TELEMETRY_IDS and sfetype == SFE_STATE_TELEMETRY_G:
+                        self.energy_snapshot_received_at[idsf] = time.time()
                     self.device_states[target_idsf][sfetype] = value
                     self.device_states[idsf][sfetype] = value
 
@@ -824,6 +889,12 @@ class VimarCloudClient:
                     await asyncio.gather(attach_watchdog, return_exceptions=True)
                 if self._session_token:
                     retry_delay = 5
+                self._energy_ready = False
+                if self._energy_refresh_task is not None:
+                    self._energy_refresh_task.cancel()
+                    await asyncio.gather(self._energy_refresh_task, return_exceptions=True)
+                    self._energy_refresh_task = None
+                self._last_energy_request_at = None
                 self._ws = None
                 self._session_token = None
                 self._fail_pending_requests(VimarConnectionError("WebSocket disconnected"))
@@ -848,6 +919,11 @@ class VimarCloudClient:
 
     async def disconnect(self) -> None:
         self._running = False
+        self._energy_ready = False
+        if self._energy_refresh_task is not None:
+            self._energy_refresh_task.cancel()
+            await asyncio.gather(self._energy_refresh_task, return_exceptions=True)
+            self._energy_refresh_task = None
         if self._keepalive_task:
             self._keepalive_task.cancel()
         if self._ws:
