@@ -477,7 +477,8 @@ class VimarCloudClient:
                 # Test: a single GETSTATUS containing all five hourly series.
                 self._energy_ready = True
                 await self._request_energy_snapshot()
-
+        
+              
         elif function == FUNC_GETSTATUS:
             bigdata_ids = {
                 item.get("idsf") for item in result
