@@ -91,7 +91,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await gateway_log.async_start()
     client.gateway_log = gateway_log
 
-    # Telemetria energia BigData (solo piani a pagamento con serie non vuote).
+    # Telemetria energia BigData (solo le serie con dati).
     telemetry = TelemetryManager(hass, client)
     await telemetry.async_start()
     client.telemetry = telemetry

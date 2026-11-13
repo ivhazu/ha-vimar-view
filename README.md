@@ -91,7 +91,7 @@ Have a device that is not listed? See [Contributing](#contributing): a short tra
 
 - Home Assistant **2024.1** or newer
 - A **MyVimar** account (the one you use in the VIEW app) and a **Vimar View Wireless** system online
-- The **free** MyVimar plan is enough for everything; some Vimar-measured kWh series (PV production, grid import and export) seem to need a paid plan
+- The **free** MyVimar plan is enough for everything, including the Vimar-measured kWh series
 
 ## Installation
 
@@ -293,15 +293,15 @@ Vimar stores hourly energy data (the daily, weekly and monthly charts of the app
 | `sensor.autoconsumo_oggi` | Self-consumption today |
 | `sensor.consumo_oggi` | Home consumption today |
 
-These are the same values shown in the Vimar app; they reset at midnight.
+These are the same values shown in the Vimar app; they reset at midnight. They work on the free MyVimar plan too; the PV series (production, grid import and export, self-consumption) appear only if your system has PV metering.
 
-For each series there are also **week**, **month** and **year** totals, again as measured by Vimar (e.g. `sensor.consumo_settimana`, `sensor.consumo_mese`, `sensor.consumo_anno`, `sensor.produzione_fotovoltaica_anno`). Weeks start on Monday; month and year are calendar periods to date. They are created only when Vimar provides the daily history for that series. *Consumo oggi* is available also on the free plan; the PV series (production, grid import and export, self-consumption) need PV metering and, as far as we know, a paid plan.
+For each series there are also **week**, **month** and **year** totals, again as measured by Vimar (e.g. `sensor.consumo_settimana`, `sensor.consumo_mese`, `sensor.consumo_anno`, `sensor.produzione_fotovoltaica_anno`). Weeks start on Monday; month and year are calendar periods to date. They are created only when Vimar provides the daily history for that series.
 
 ### Energy dashboard
 
 All kWh sensors work with the native **Energy dashboard** (**Settings → Dashboards → Energy**):
 
-| Dashboard section | Without PV | With PV and paid plan |
+| Dashboard section | Without PV | With PV |
 |---|---|---|
 | Grid consumption | `sensor.consumo_oggi` (Vimar-measured) or `sensor.consumo_totale_kwh` | `sensor.prelievo_rete_oggi` |
 | Return to grid | — | `sensor.immissione_rete_oggi` |
@@ -424,7 +424,7 @@ Some values arrive only after the first change. If a device type is not supporte
 No. Vimar View Wireless gateways expose locally only HomeKit, with lights only; everything else (energy, load management, routines…) is available only through the Vimar cloud.
 
 **Do I need a paid MyVimar plan?**
-No. The free plan covers everything; only some Vimar-measured kWh series for PV systems seem to need a paid plan.
+No. The free plan covers everything, including the kWh series measured by Vimar (confirmed by a user with PV on the free plan).
 
 **Can I create or edit routines from Home Assistant?**
 No: you can run, enable and suspend them. Creation and editing stay in the Vimar app.

@@ -91,7 +91,7 @@ Hai un dispositivo che non è in elenco? Vedi [Contribuire](#contribuire): di so
 
 - Home Assistant **2024.1** o successivo
 - Un account **MyVimar** (quello dell'app VIEW) e un impianto **Vimar View Wireless** online
-- Il piano MyVimar **gratuito** basta per tutto; alcune serie di kWh misurati da Vimar (produzione fotovoltaica, prelievo e immissione) sembrano richiedere un piano a pagamento
+- Il piano MyVimar **gratuito** basta per tutto, comprese le serie di kWh misurati da Vimar
 
 ## Installazione
 
@@ -293,15 +293,15 @@ Vimar registra i dati energetici ora per ora (i grafici giornalieri, settimanali
 | `sensor.autoconsumo_oggi` | Autoconsumo di oggi |
 | `sensor.consumo_oggi` | Consumo della casa oggi |
 
-Sono gli stessi valori dell'app Vimar; si azzerano a mezzanotte.
+Sono gli stessi valori dell'app Vimar; si azzerano a mezzanotte. Funzionano anche con il piano MyVimar gratuito; le serie del fotovoltaico (produzione, prelievo, immissione, autoconsumo) compaiono solo se l'impianto misura il fotovoltaico.
 
-Per ogni serie ci sono anche i totali di **settimana**, **mese** e **anno**, sempre misurati da Vimar (es. `sensor.consumo_settimana`, `sensor.consumo_mese`, `sensor.consumo_anno`, `sensor.produzione_fotovoltaica_anno`). La settimana parte dal lunedì; mese e anno sono quelli di calendario fino a oggi. Vengono creati solo se Vimar fornisce lo storico giornaliero di quella serie. *Consumo oggi* è disponibile anche con il piano gratuito; le serie del fotovoltaico (produzione, prelievo, immissione, autoconsumo) richiedono la misura del fotovoltaico e, per quanto sappiamo, un piano a pagamento.
+Per ogni serie ci sono anche i totali di **settimana**, **mese** e **anno**, sempre misurati da Vimar (es. `sensor.consumo_settimana`, `sensor.consumo_mese`, `sensor.consumo_anno`, `sensor.produzione_fotovoltaica_anno`). La settimana parte dal lunedì; mese e anno sono quelli di calendario fino a oggi. Vengono creati solo se Vimar fornisce lo storico giornaliero di quella serie.
 
 ### Dashboard Energia
 
 Tutti i sensori kWh funzionano con la **dashboard Energia** (**Impostazioni → Plance → Energia**):
 
-| Sezione della dashboard | Senza fotovoltaico | Con fotovoltaico e piano a pagamento |
+| Sezione della dashboard | Senza fotovoltaico | Con fotovoltaico |
 |---|---|---|
 | Consumo di rete | `sensor.consumo_oggi` (misurato da Vimar) oppure `sensor.consumo_totale_kwh` | `sensor.prelievo_rete_oggi` |
 | Ritorno alla rete | — | `sensor.immissione_rete_oggi` |
@@ -424,7 +424,7 @@ Alcuni valori arrivano solo al primo cambio. Se un tipo di dispositivo non è an
 No. I gateway Vimar View Wireless espongono in locale solo HomeKit, e solo per le luci; tutto il resto (energia, gestione carichi, routine…) è disponibile solo tramite il cloud Vimar.
 
 **Serve un piano MyVimar a pagamento?**
-No. Il piano gratuito copre tutto; solo alcune serie di kWh misurati da Vimar per il fotovoltaico sembrano richiedere un piano a pagamento.
+No. Il piano gratuito copre tutto, comprese le serie di kWh misurati da Vimar (confermato da un utente con fotovoltaico e piano gratuito).
 
 **Posso creare o modificare le routine da Home Assistant?**
 No: puoi eseguirle, abilitarle e sospenderle. Creazione e modifica restano nell'app Vimar.

@@ -78,7 +78,7 @@ async def async_setup_entry(
     if client.gateway_log is not None:
         entities.append(VimarGatewayEventSensor(client, entry))
 
-    # kWh di oggi dalla telemetria Vimar (piano a pagamento).
+    # kWh di oggi dalla telemetria Vimar (BigData).
     if client.telemetry is not None and client.telemetry.series:
         from .telemetry import PERIOD_SUFFIX, SERIES_BASE_NAMES, SERIES_NAMES
 

@@ -1,10 +1,10 @@
-"""Telemetria energia (BigData) per gli impianti con piano MyVimar a pagamento.
+"""Telemetria energia (BigData) misurata da Vimar, disponibile anche col piano MyVimar gratuito.
 
 La discovery con `sfcategory: "BigData"` restituisce le serie `SF_TelemetryEnergy`
 (consumo, prelievo, immissione, produzione, autoconsumo). Il valore
 `SFE_State_Telemetry_G` è un JSON `{"last_update": <epoch>, "data": [Wh, ...]}`
 con i Wh ora per ora degli ultimi 7 giorni: `data[0]` è l'ora di `last_update`,
-`data[1]` quella precedente e così via. Sul piano gratuito i valori sono vuoti
+`data[1]` quella precedente e così via. Se una serie non ha dati (es. niente fotovoltaico) i valori sono vuoti
 e i sensori non vengono creati.
 
 Grazie a @afazio82-sudo per l'analisi (PR #15 / #17).
