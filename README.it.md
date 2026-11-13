@@ -214,7 +214,7 @@ I nomi delle entità seguono i nomi che hai dato ai dispositivi nell'app Vimar, 
 | `sensor.consumo_totale_kwh` | Energia totale (kWh) |
 | `sensor.scambio_rete` | **Solo con fotovoltaico**: potenza scambiata con la rete (W, positiva = prelievo, negativa = immissione) |
 | `sensor.produzione_fotovoltaica` | **Solo con fotovoltaico**: potenza prodotta (W) |
-| `sensor.consumo_oggi`, `sensor.prelievo_rete_oggi` e altri | kWh di oggi **misurati da Vimar**, quando disponibili, vedi [Energia](#energia) |
+| `sensor.consumo_oggi`, `sensor.prelievo_rete_oggi` e altri | kWh di oggi, della settimana, del mese e dell'anno **misurati da Vimar**, quando disponibili, vedi [Energia](#energia) |
 | `sensor.soglia_alert`, `sensor.soglia_distacco` | Soglie attuali di allerta e di distacco (W) |
 | `number.imposta_soglia_alert`, `number.imposta_soglia_distacco` | Modifica delle soglie |
 | `button.ripristina_tutti_i_carichi` | Riporta tutti i carichi in Auto |
@@ -293,7 +293,9 @@ Vimar registra i dati energetici ora per ora (i grafici giornalieri, settimanali
 | `sensor.autoconsumo_oggi` | Autoconsumo di oggi |
 | `sensor.consumo_oggi` | Consumo della casa oggi |
 
-Sono gli stessi valori dell'app Vimar; si azzerano a mezzanotte. *Consumo oggi* è disponibile anche con il piano gratuito; le serie del fotovoltaico (produzione, prelievo, immissione, autoconsumo) richiedono la misura del fotovoltaico e, per quanto sappiamo, un piano a pagamento.
+Sono gli stessi valori dell'app Vimar; si azzerano a mezzanotte.
+
+Per ogni serie ci sono anche i totali di **settimana**, **mese** e **anno**, sempre misurati da Vimar (es. `sensor.consumo_settimana`, `sensor.consumo_mese`, `sensor.consumo_anno`, `sensor.produzione_fotovoltaica_anno`). La settimana parte dal lunedì; mese e anno sono quelli di calendario fino a oggi. Vengono creati solo se Vimar fornisce lo storico giornaliero di quella serie. *Consumo oggi* è disponibile anche con il piano gratuito; le serie del fotovoltaico (produzione, prelievo, immissione, autoconsumo) richiedono la misura del fotovoltaico e, per quanto sappiamo, un piano a pagamento.
 
 ### Dashboard Energia
 

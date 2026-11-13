@@ -214,7 +214,7 @@ Entity names follow the names you gave to devices in the Vimar app, and entity I
 | `sensor.consumo_totale_kwh` | Total energy (kWh) |
 | `sensor.scambio_rete` | **PV systems only**: power exchanged with the grid (W, positive = import, negative = export) |
 | `sensor.produzione_fotovoltaica` | **PV systems only**: production power (W) |
-| `sensor.consumo_oggi`, `sensor.prelievo_rete_oggi` and others | Today's kWh **measured by Vimar**, when available, see [Energy](#energy) |
+| `sensor.consumo_oggi`, `sensor.prelievo_rete_oggi` and others | Today's, this week's, month's and year's kWh **measured by Vimar**, when available, see [Energy](#energy) |
 | `sensor.soglia_alert`, `sensor.soglia_distacco` | Current alert and cut-off thresholds (W) |
 | `number.imposta_soglia_alert`, `number.imposta_soglia_distacco` | Change the thresholds |
 | `button.ripristina_tutti_i_carichi` | Restores all loads to Auto |
@@ -293,7 +293,9 @@ Vimar stores hourly energy data (the daily, weekly and monthly charts of the app
 | `sensor.autoconsumo_oggi` | Self-consumption today |
 | `sensor.consumo_oggi` | Home consumption today |
 
-These are the same values shown in the Vimar app; they reset at midnight. *Consumo oggi* is available also on the free plan; the PV series (production, grid import and export, self-consumption) need PV metering and, as far as we know, a paid plan.
+These are the same values shown in the Vimar app; they reset at midnight.
+
+For each series there are also **week**, **month** and **year** totals, again as measured by Vimar (e.g. `sensor.consumo_settimana`, `sensor.consumo_mese`, `sensor.consumo_anno`, `sensor.produzione_fotovoltaica_anno`). Weeks start on Monday; month and year are calendar periods to date. They are created only when Vimar provides the daily history for that series. *Consumo oggi* is available also on the free plan; the PV series (production, grid import and export, self-consumption) need PV metering and, as far as we know, a paid plan.
 
 ### Energy dashboard
 

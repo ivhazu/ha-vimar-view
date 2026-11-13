@@ -80,7 +80,7 @@ async def async_setup_entry(
 
     # kWh di oggi dalla telemetria Vimar (piano a pagamento).
     if client.telemetry is not None and client.telemetry.series:
-        from .telemetry import SERIES_NAMES
+        from .telemetry import PERIOD_SUFFIX, SERIES_BASE_NAMES, SERIES_NAMES
 
         tele_info = (
             energy_manager_device_info(entry, client)
@@ -92,6 +92,13 @@ async def async_setup_entry(
                 client, idsf, SERIES_NAMES[sstype], tele_info,
                 f"{DOMAIN}_{entry.entry_id}_{idsf}_daily_energy",
             ))
+            for period in client.telemetry.periods.get(idsf, []):
+                entities.append(VimarTelemetryEnergySensor(
+                    client, idsf,
+                    f"{SERIES_BASE_NAMES[sstype]} {PERIOD_SUFFIX[period]}", tele_info,
+                    f"{DOMAIN}_{entry.entry_id}_{idsf}_{period}_energy",
+                    period=period,
+                ))
 
     # Ultima esecuzione di ogni routine (rilevata o avviata da HA).
     if client.routine_tracker is not None:
@@ -155,9 +162,13 @@ class VimarEnergySensor(RestoreEntity, SensorEntity):
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
 
-    def __init__(self, client: VimarCloudClient, idsf: int, name: str, device_info, unique_id: str) -> None:
+    def __init__(
+        self, client: VimarCloudClient, idsf: int, name: str, device_info, unique_id: str,
+        period: str | None = None,
+    ) -> None:
         self._client = client
         self._idsf = idsf
+        self._period = period
         self._attr_name = name
         self._attr_unique_id = unique_id
         self._attr_device_info = device_info
@@ -470,7 +481,7 @@ class VimarGatewayEventSensor(SensorEntity):
 
 
 class VimarTelemetryEnergySensor(SensorEntity):
-    """kWh di oggi misurati da Vimar (telemetria oraria BigData, piano a pagamento)."""
+    """kWh misurati da Vimar (telemetria BigData): oggi, oppure settimana/mese/anno in corso."""
 
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.ENERGY
@@ -478,9 +489,13 @@ class VimarTelemetryEnergySensor(SensorEntity):
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_suggested_display_precision = 2
 
-    def __init__(self, client: VimarCloudClient, idsf: int, name: str, device_info, unique_id: str) -> None:
+    def __init__(
+        self, client: VimarCloudClient, idsf: int, name: str, device_info, unique_id: str,
+        period: str | None = None,
+    ) -> None:
         self._client = client
         self._idsf = idsf
+        self._period = period
         self._attr_name = name
         self._attr_unique_id = unique_id
         self._attr_device_info = device_info
@@ -490,8 +505,16 @@ class VimarTelemetryEnergySensor(SensorEntity):
 
     @property
     def native_value(self) -> float | None:
-        return self._client.telemetry.value(self._idsf)
+        if self._period is None:
+            return self._client.telemetry.value(self._idsf)
+        return self._client.telemetry.period_value(self._idsf, self._period)
 
     @property
     def extra_state_attributes(self) -> dict:
-        return {"source": "Vimar BigData (Telemetry_G)", "bigdata_idsf": self._idsf}
+        if self._period is None:
+            return {"source": "Vimar BigData (Telemetry_G)", "bigdata_idsf": self._idsf}
+        return {
+            "source": "Vimar BigData (Telemetry_G + S/M)",
+            "bigdata_idsf": self._idsf,
+            "period": self._period,
+        }
