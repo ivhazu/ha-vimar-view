@@ -15,7 +15,8 @@ from typing import Any, Callable
 import aiohttp
 
 from .const import (
-    ENERGY_TELEMETRY_IDS,
+    ENERGY_TELEMETRY_TYPES,
+    ENERGY_TELEMETRY_SFTYPE,
     ENERGY_REFRESH_MIN_SECONDS,
     ENERGY_TRIGGER_SFETYPES,
     SFE_STATE_TELEMETRY_G,
@@ -142,6 +143,10 @@ class VimarCloudClient:
         self._energy_refresh_task: asyncio.Task | None = None
         self._last_energy_request_at: float | None = None
         self._energy_ready = False
+        # Mappa sstype -> idsf, ricostruita a ogni discovery BigData.
+        self.energy_telemetry_ids: dict[str, int] = {}
+        # Risolve la categoria di ogni risposta sfdiscovery tramite msgid.
+        self._discovery_request_categories: dict[str, str] = {}
         self.energy_snapshot_received_at: dict[int, float] = {}
         self._discovery_callback: Callable | None = None
         self._token_lock = asyncio.Lock()
@@ -366,6 +371,72 @@ class VimarCloudClient:
                 self._pending_requests.pop(msgid, None)
         return msgid
 
+    async def _send_discovery_request(self, category: str) -> None:
+        """Registra la categoria prima di inviare una discovery via WebSocket.
+
+        Non usare wait_response qui: il ciclo di ricezione gestisce le risposte.
+        """
+        msgid = self._next_msgid()
+        msg = {
+            "type": "request",
+            "function": FUNC_SFDISCOVERY,
+            "source": self._source_id,
+            "target": self._duid,
+            "token": self._session_token or "",
+            "msgid": msgid,
+            "args": [{"sfcategory": category}],
+            "params": [],
+        }
+        self._discovery_request_categories[msgid] = category
+        try:
+            await self._send(msg)
+        except Exception:
+            self._discovery_request_categories.pop(msgid, None)
+            raise
+
+    def _finish_discovery(self) -> None:
+        """Notifica Home Assistant solo dopo la risposta BigData."""
+        if self._discovery_callback:
+            callback = self._discovery_callback
+            self._discovery_callback = None
+            callback()
+
+    def _process_bigdata_discovery(self, result: list) -> None:
+        """Ricava gli ID reali dai metadati (sftype, sstype)."""
+        found: dict[str, int] = {}
+        for item in result:
+            if not isinstance(item, dict):
+                continue
+            members = item.get("sf")
+            series = members if isinstance(members, list) else [item]
+            for sf in series:
+                if not isinstance(sf, dict):
+                    continue
+                idsf = sf.get("idsf")
+                sstype = sf.get("sstype")
+                if (
+                    isinstance(idsf, int)
+                    and not isinstance(idsf, bool)
+                    and sf.get("sftype") == ENERGY_TELEMETRY_SFTYPE
+                    and sstype in ENERGY_TELEMETRY_TYPES
+                ):
+                    if sstype in found and found[sstype] != idsf:
+                        _LOGGER.warning(
+                            "Vimar BigData: serie duplicata %s (%s, %s); mantengo la prima",
+                            sstype, found[sstype], idsf,
+                        )
+                        continue
+                    found[sstype] = idsf
+        self.energy_telemetry_ids = found
+        self._energy_ready = bool(found)
+        _LOGGER.info(
+            "Vimar BigData: individuate %d/%d serie energetiche (%s)",
+            len(found), len(ENERGY_TELEMETRY_TYPES), ", ".join(sorted(found)),
+        )
+        missing = set(ENERGY_TELEMETRY_TYPES) - set(found)
+        if missing:
+            _LOGGER.warning("Vimar BigData: serie non trovate: %s", ", ".join(sorted(missing)))
+
     async def _send_command(self, args: list, timeout: float | None = None) -> None:
         if self._ws is None or self._ws.closed or not self._session_token:
             raise VimarConnectionError("Vimar session not ready")
@@ -433,6 +504,12 @@ class VimarCloudClient:
         
         if error != 0:
             _LOGGER.error("Vimar: error in %s: %s", function, msg.get("result"))
+            if msg_type == "response" and function == FUNC_SFDISCOVERY:
+                failed_category = self._discovery_request_categories.pop(str(msg.get("msgid")), None)
+                if failed_category == SF_CATEGORY_BIGDATA:
+                    self._energy_ready = False
+                    self.energy_telemetry_ids.clear()
+                    self._finish_discovery()  # Altri dispositivi restano disponibili.
             if msg_type == "response":
                 msgid = msg.get("msgid")
                 future = self._pending_requests.pop(str(msgid), None) if msgid is not None else None
@@ -467,22 +544,26 @@ class VimarCloudClient:
                 srv = info.get("serverinfo", {})
                 self.gateway_sw_version = srv.get("softwareversion", "")
                 self.gateway_mac = srv.get("mac", "")
-                await self._send_request(FUNC_SFDISCOVERY, [{"sfcategory": SF_CATEGORY_PLANT}])
+                await self._send_discovery_request(SF_CATEGORY_PLANT)
 
         elif function == FUNC_SFDISCOVERY:
-            if result and isinstance(result[0], dict) and "sf" in result[0]:
+            category = self._discovery_request_categories.pop(str(msgid), None)
+            if category == SF_CATEGORY_PLANT:
                 await self._process_plant_discovery(result)
+            elif category == SF_CATEGORY_BIGDATA:
+                self._process_bigdata_discovery(result)
+                # Attivazione immediata soltanto al primo snapshot/reconnect.
+                if self._energy_ready:
+                    await self._request_energy_snapshot()
+                self._finish_discovery()
             else:
-                _LOGGER.debug("Vimar: BigData discovery received")
-                # Test: a single GETSTATUS containing all five hourly series.
-                self._energy_ready = True
-                await self._request_energy_snapshot()
+                _LOGGER.warning("Vimar: sfdiscovery inattesa, msgid=%s", msgid)
         
               
         elif function == FUNC_GETSTATUS:
             bigdata_ids = {
                 item.get("idsf") for item in result
-                if isinstance(item, dict) and item.get("idsf") in ENERGY_TELEMETRY_IDS
+                if isinstance(item, dict) and item.get("idsf") in self.energy_telemetry_ids.values()
             }
             if bigdata_ids:
                 _LOGGER.debug("Vimar energy: risposta getstatus, ID ricevuti: %s", sorted(bigdata_ids))
@@ -520,7 +601,7 @@ class VimarCloudClient:
             return
         request = [
             {"idsf": idsf, "sfetype": [SFE_STATE_TELEMETRY_G]}
-            for idsf in ENERGY_TELEMETRY_IDS
+            for idsf in dict.fromkeys(self.energy_telemetry_ids.values())
         ]
         try:
             await self._send_request(FUNC_GETSTATUS, request)
@@ -657,13 +738,11 @@ class VimarCloudClient:
                 pass
 
         try:
-            await self._send_request(FUNC_SFDISCOVERY, [{"sfcategory": SF_CATEGORY_BIGDATA}])
-        except Exception:
-            pass
-
-        if self._discovery_callback:
-            self._discovery_callback()
-            self._discovery_callback = None
+            await self._send_discovery_request(SF_CATEGORY_BIGDATA)
+        except Exception as err:
+            _LOGGER.warning("Vimar: BigData discovery request failed: %s", err)
+            self._energy_ready = False
+            self._finish_discovery()  # Preserva setup di tutti gli altri dispositivi.
 
     def _classify_device(self, sfetypes: list[str], sstype: str) -> str:
         if sstype == "SS_Clima_Zone":
@@ -725,7 +804,7 @@ class VimarCloudClient:
                 value = element.get("value")
                 
                 if sfetype and value is not None:
-                    if idsf in ENERGY_TELEMETRY_IDS and sfetype == SFE_STATE_TELEMETRY_G:
+                    if idsf in self.energy_telemetry_ids.values() and sfetype == SFE_STATE_TELEMETRY_G:
                         self.energy_snapshot_received_at[idsf] = time.time()
                     self.device_states[target_idsf][sfetype] = value
                     self.device_states[idsf][sfetype] = value
@@ -861,6 +940,10 @@ class VimarCloudClient:
                     ) as ws:
                         self._ws = ws
                         self._msgid = 9
+                        self._discovery_request_categories.clear()
+                        self.energy_telemetry_ids.clear()
+                        self.energy_snapshot_received_at.clear()
+                        self._energy_ready = False
                         self._client_token = _random_client_token()
                         self._session_token = None
                         attach_watchdog = asyncio.create_task(self._attach_watchdog(ws))
@@ -891,6 +974,7 @@ class VimarCloudClient:
                 if self._session_token:
                     retry_delay = 5
                 self._energy_ready = False
+                self._discovery_request_categories.clear()
                 if self._energy_refresh_task is not None:
                     self._energy_refresh_task.cancel()
                     await asyncio.gather(self._energy_refresh_task, return_exceptions=True)
