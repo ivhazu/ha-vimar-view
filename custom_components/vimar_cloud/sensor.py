@@ -28,7 +28,7 @@ from .const import (
     SFE_STATE_GLOBAL_THRESHOLD,
     SFE_STATE_LOAD,
     MAX_ENERGY_SAMPLE_GAP,
-    ENERGY_TELEMETRY_IDS,
+    ENERGY_TELEMETRY_TYPES,
     SFE_STATE_TELEMETRY_G,
 )
 from .device_info import device_info_for_idsf, energy_manager_device_info
@@ -74,10 +74,12 @@ async def async_setup_entry(
                 client, idsf, "Soglia Distacco", 1,
                 em_info, f"{DOMAIN}_{idsf}_threshold_disconnect"
             ))
-            for energy_idsf, energy_name in ENERGY_TELEMETRY_IDS.items():
+            for sstype, energy_name in ENERGY_TELEMETRY_TYPES.items():
+                if sstype not in client.energy_telemetry_ids:
+                    continue
                 entities.append(VimarDailyTelemetryEnergySensor(
-                    client, energy_idsf, energy_name,
-                    em_info, f"{DOMAIN}_{entry.entry_id}_{energy_idsf}_daily_energy"
+                    client, sstype, energy_name,
+                    em_info, f"{DOMAIN}_{entry.entry_id}_{sstype}_daily_energy"
                 ))
         elif dt == "load_control":
             dev_info = device_info_for_idsf(client, idsf, entry)
@@ -237,12 +239,17 @@ class VimarDailyTelemetryEnergySensor(SensorEntity):
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_should_poll = False
 
-    def __init__(self, client: VimarCloudClient, idsf: int, name: str, device_info, unique_id: str) -> None:
+    def __init__(self, client: VimarCloudClient, sstype: str, name: str, device_info, unique_id: str) -> None:
         self._client = client
-        self._idsf = idsf
+        self._sstype = sstype
         self._attr_name = name
         self._attr_unique_id = unique_id
         self._attr_device_info = device_info
+
+    @property
+    def _idsf(self) -> int | None:
+        """Risoluzione dinamica: valida anche dopo una riconnessione WebSocket."""
+        return self._client.energy_telemetry_ids.get(self._sstype)
 
     async def async_added_to_hass(self) -> None:
         self._client.register_state_callback(self._on_update)
@@ -252,13 +259,16 @@ class VimarDailyTelemetryEnergySensor(SensorEntity):
 
     @callback
     def _on_update(self, updated: list[int]) -> None:
-        if self._idsf in updated:
+        if self._idsf is not None and self._idsf in updated:
             self.async_write_ha_state()
 
     @property
     def native_value(self) -> float | None:
-        raw = self._client.get_state(self._idsf, SFE_STATE_TELEMETRY_G)
-        received_at = self._client.energy_snapshot_received_at.get(self._idsf)
+        idsf = self._idsf
+        if idsf is None:
+            return None
+        raw = self._client.get_state(idsf, SFE_STATE_TELEMETRY_G)
+        received_at = self._client.energy_snapshot_received_at.get(idsf)
         if raw is None or received_at is None:
             return None
         now = dt_util.now()
@@ -301,6 +311,7 @@ class VimarDailyTelemetryEnergySensor(SensorEntity):
             "source": "Vimar Cloud BigData",
             "telemetry_type": SFE_STATE_TELEMETRY_G,
             "bigdata_idsf": self._idsf,
+            "bigdata_sstype": self._sstype,
             "calculation": "sum_hourly_values",
         }
 
