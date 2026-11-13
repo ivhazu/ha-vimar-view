@@ -32,7 +32,7 @@ BIGDATA_WAIT_SECONDS = 10
 
 # sstype → nome del sensore giornaliero (kWh di oggi)
 SERIES_NAMES = {
-    "SS_EnergyConsumption_GL": "Consumo casa oggi",
+    "SS_EnergyConsumption_GL": "Consumo oggi",
     "SS_EnergyWithdrawal_GL": "Prelievo rete oggi",
     "SS_EnergyIntake_GL": "Immissione rete oggi",
     "SS_EnergyProduction_GL": "Produzione fotovoltaica oggi",

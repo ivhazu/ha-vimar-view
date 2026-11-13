@@ -61,7 +61,7 @@
 - 🔌 **Easy setup** — just your MyVimar email and password: gateways and thermostats are read from your account, no DUID to look up.
 - 💡 **Lights, dimmers, shutters, thermostats, sockets** — with the same features as the app.
 - 🔋 **Load management** — power, energy, mode, thresholds and restore, for each actuator and for the whole home.
-- ☀️ **Photovoltaics** — grid exchange and production power and, with a paid MyVimar plan, the **kWh measured by Vimar**.
+- ☀️ **Photovoltaics** — grid exchange and production power and the daily **kWh measured by Vimar**, when your plan provides them.
 - 📊 **Energy dashboard ready** — every kWh sensor works with the native Home Assistant Energy dashboard.
 - 🤖 **Routines** — run them, enable or suspend them, and get notified when they run.
 - 🔔 **Gateway events** — load cut-off and restore, forced loads, internet and cloud connection lost or restored, as Home Assistant events.
@@ -91,7 +91,7 @@ Have a device that is not listed? See [Contributing](#contributing): a short tra
 
 - Home Assistant **2024.1** or newer
 - A **MyVimar** account (the one you use in the VIEW app) and a **Vimar View Wireless** system online
-- The **free** MyVimar plan is enough for everything except the Vimar-measured kWh (telemetry), which needs a paid plan
+- The **free** MyVimar plan is enough for everything; some Vimar-measured kWh series (PV production, grid import and export) seem to need a paid plan
 
 ## Installation
 
@@ -214,7 +214,7 @@ Entity names follow the names you gave to devices in the Vimar app, and entity I
 | `sensor.consumo_totale_kwh` | Total energy (kWh) |
 | `sensor.scambio_rete` | **PV systems only**: power exchanged with the grid (W, positive = import, negative = export) |
 | `sensor.produzione_fotovoltaica` | **PV systems only**: production power (W) |
-| `sensor.prelievo_rete_oggi` and others | **Paid plan only**: today's kWh measured by Vimar, see [Energy](#energy) |
+| `sensor.consumo_oggi`, `sensor.prelievo_rete_oggi` and others | Today's kWh **measured by Vimar**, when available, see [Energy](#energy) |
 | `sensor.soglia_alert`, `sensor.soglia_distacco` | Current alert and cut-off thresholds (W) |
 | `number.imposta_soglia_alert`, `number.imposta_soglia_distacco` | Change the thresholds |
 | `button.ripristina_tutti_i_carichi` | Restores all loads to Auto |
@@ -281,9 +281,9 @@ No events are fired for entries already in the log at startup. "Connection lost"
 
 Vimar reports the **instant power** of actuators and meters. The integration turns it into **kWh** locally (trapezoidal integration), keeps the total across restarts and never invents consumption during cloud outages: gaps longer than 5 minutes are not integrated. Corrupted saved values (not finite or above 1,000,000 kWh) are discarded on startup.
 
-### kWh measured by Vimar (paid plan)
+### kWh measured by Vimar
 
-With a **paid MyVimar plan** Vimar stores hourly energy data for PV systems. The integration reads it every 10 minutes and creates, only for the series available on your system:
+Vimar stores hourly energy data (the daily, weekly and monthly charts of the app). The integration reads it every 10 minutes and creates a sensor **only for the series that actually contain data on your system**:
 
 | Sensor | Meaning |
 |---|---|
@@ -291,9 +291,9 @@ With a **paid MyVimar plan** Vimar stores hourly energy data for PV systems. The
 | `sensor.immissione_rete_oggi` | Energy fed into the grid today |
 | `sensor.produzione_fotovoltaica_oggi` | PV production today |
 | `sensor.autoconsumo_oggi` | Self-consumption today |
-| `sensor.consumo_casa_oggi` | Home consumption today |
+| `sensor.consumo_oggi` | Home consumption today |
 
-These are the same values shown in the Vimar app; they reset at midnight.
+These are the same values shown in the Vimar app; they reset at midnight. *Consumo oggi* is available also on the free plan; the PV series (production, grid import and export, self-consumption) need PV metering and, as far as we know, a paid plan.
 
 ### Energy dashboard
 
@@ -301,7 +301,7 @@ All kWh sensors work with the native **Energy dashboard** (**Settings → Dashbo
 
 | Dashboard section | Without PV | With PV and paid plan |
 |---|---|---|
-| Grid consumption | `sensor.consumo_totale_kwh` | `sensor.prelievo_rete_oggi` |
+| Grid consumption | `sensor.consumo_oggi` (Vimar-measured) or `sensor.consumo_totale_kwh` | `sensor.prelievo_rete_oggi` |
 | Return to grid | — | `sensor.immissione_rete_oggi` |
 | Solar production | — | `sensor.produzione_fotovoltaica_oggi` |
 | Individual devices | `sensor.<name>_energia` | `sensor.<name>_energia` |
@@ -422,7 +422,7 @@ Some values arrive only after the first change. If a device type is not supporte
 No. Vimar View Wireless gateways expose locally only HomeKit, with lights only; everything else (energy, load management, routines…) is available only through the Vimar cloud.
 
 **Do I need a paid MyVimar plan?**
-No. The free plan covers everything except the Vimar-measured kWh for PV systems.
+No. The free plan covers everything; only some Vimar-measured kWh series for PV systems seem to need a paid plan.
 
 **Can I create or edit routines from Home Assistant?**
 No: you can run, enable and suspend them. Creation and editing stay in the Vimar app.

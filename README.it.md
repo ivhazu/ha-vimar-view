@@ -61,7 +61,7 @@
 - 🔌 **Configurazione semplice** — bastano email e password MyVimar: gateway e termostati vengono letti dal tuo account, senza cercare il DUID.
 - 💡 **Luci, dimmer, tapparelle, termostati, prese** — con le stesse funzioni dell'app.
 - 🔋 **Gestione carichi** — potenza, energia, modalità, soglie e ripristino, per ogni attuatore e per tutta la casa.
-- ☀️ **Fotovoltaico** — potenza scambiata con la rete e prodotta e, con un piano MyVimar a pagamento, i **kWh misurati da Vimar**.
+- ☀️ **Fotovoltaico** — potenza scambiata con la rete e prodotta e i **kWh giornalieri misurati da Vimar**, quando il tuo piano li fornisce.
 - 📊 **Pronta per la dashboard Energia** — tutti i sensori kWh funzionano con la dashboard Energia di Home Assistant.
 - 🤖 **Routine** — eseguile, abilitale o sospendile, e ricevi una notifica quando partono.
 - 🔔 **Eventi del gateway** — distacco e ripristino dei carichi, forzature, connessione a internet o al cloud persa o ripristinata, come eventi di Home Assistant.
@@ -91,7 +91,7 @@ Hai un dispositivo che non è in elenco? Vedi [Contribuire](#contribuire): di so
 
 - Home Assistant **2024.1** o successivo
 - Un account **MyVimar** (quello dell'app VIEW) e un impianto **Vimar View Wireless** online
-- Il piano MyVimar **gratuito** basta per tutto, tranne i kWh misurati da Vimar (telemetria), che richiedono un piano a pagamento
+- Il piano MyVimar **gratuito** basta per tutto; alcune serie di kWh misurati da Vimar (produzione fotovoltaica, prelievo e immissione) sembrano richiedere un piano a pagamento
 
 ## Installazione
 
@@ -214,7 +214,7 @@ I nomi delle entità seguono i nomi che hai dato ai dispositivi nell'app Vimar, 
 | `sensor.consumo_totale_kwh` | Energia totale (kWh) |
 | `sensor.scambio_rete` | **Solo con fotovoltaico**: potenza scambiata con la rete (W, positiva = prelievo, negativa = immissione) |
 | `sensor.produzione_fotovoltaica` | **Solo con fotovoltaico**: potenza prodotta (W) |
-| `sensor.prelievo_rete_oggi` e altri | **Solo piano a pagamento**: kWh di oggi misurati da Vimar, vedi [Energia](#energia) |
+| `sensor.consumo_oggi`, `sensor.prelievo_rete_oggi` e altri | kWh di oggi **misurati da Vimar**, quando disponibili, vedi [Energia](#energia) |
 | `sensor.soglia_alert`, `sensor.soglia_distacco` | Soglie attuali di allerta e di distacco (W) |
 | `number.imposta_soglia_alert`, `number.imposta_soglia_distacco` | Modifica delle soglie |
 | `button.ripristina_tutti_i_carichi` | Riporta tutti i carichi in Auto |
@@ -281,9 +281,9 @@ Al primo avvio non vengono generati eventi per le voci già presenti. Le voci di
 
 Vimar fornisce la **potenza istantanea** di attuatori e misuratori. L'integrazione la trasforma in **kWh** localmente (integrazione trapezoidale), conserva il totale ai riavvii e non inventa consumi durante le interruzioni del cloud: i buchi più lunghi di 5 minuti non vengono integrati. I valori salvati corrotti (non finiti o oltre 1.000.000 kWh) vengono scartati all'avvio.
 
-### kWh misurati da Vimar (piano a pagamento)
+### kWh misurati da Vimar
 
-Con un **piano MyVimar a pagamento** Vimar registra i dati energetici ora per ora per gli impianti con fotovoltaico. L'integrazione li legge ogni 10 minuti e crea, solo per le serie disponibili sul tuo impianto:
+Vimar registra i dati energetici ora per ora (i grafici giornalieri, settimanali e mensili dell'app). L'integrazione li legge ogni 10 minuti e crea un sensore **solo per le serie che sul tuo impianto contengono davvero dati**:
 
 | Sensore | Significato |
 |---|---|
@@ -291,9 +291,9 @@ Con un **piano MyVimar a pagamento** Vimar registra i dati energetici ora per or
 | `sensor.immissione_rete_oggi` | Energia immessa in rete oggi |
 | `sensor.produzione_fotovoltaica_oggi` | Produzione fotovoltaica di oggi |
 | `sensor.autoconsumo_oggi` | Autoconsumo di oggi |
-| `sensor.consumo_casa_oggi` | Consumo della casa oggi |
+| `sensor.consumo_oggi` | Consumo della casa oggi |
 
-Sono gli stessi valori dell'app Vimar; si azzerano a mezzanotte.
+Sono gli stessi valori dell'app Vimar; si azzerano a mezzanotte. *Consumo oggi* è disponibile anche con il piano gratuito; le serie del fotovoltaico (produzione, prelievo, immissione, autoconsumo) richiedono la misura del fotovoltaico e, per quanto sappiamo, un piano a pagamento.
 
 ### Dashboard Energia
 
@@ -301,7 +301,7 @@ Tutti i sensori kWh funzionano con la **dashboard Energia** (**Impostazioni → 
 
 | Sezione della dashboard | Senza fotovoltaico | Con fotovoltaico e piano a pagamento |
 |---|---|---|
-| Consumo di rete | `sensor.consumo_totale_kwh` | `sensor.prelievo_rete_oggi` |
+| Consumo di rete | `sensor.consumo_oggi` (misurato da Vimar) oppure `sensor.consumo_totale_kwh` | `sensor.prelievo_rete_oggi` |
 | Ritorno alla rete | — | `sensor.immissione_rete_oggi` |
 | Produzione solare | — | `sensor.produzione_fotovoltaica_oggi` |
 | Singoli dispositivi | `sensor.<nome>_energia` | `sensor.<nome>_energia` |
@@ -422,7 +422,7 @@ Alcuni valori arrivano solo al primo cambio. Se un tipo di dispositivo non è an
 No. I gateway Vimar View Wireless espongono in locale solo HomeKit, e solo per le luci; tutto il resto (energia, gestione carichi, routine…) è disponibile solo tramite il cloud Vimar.
 
 **Serve un piano MyVimar a pagamento?**
-No. Il piano gratuito copre tutto, tranne i kWh misurati da Vimar per gli impianti con fotovoltaico.
+No. Il piano gratuito copre tutto; solo alcune serie di kWh misurati da Vimar per il fotovoltaico sembrano richiedere un piano a pagamento.
 
 **Posso creare o modificare le routine da Home Assistant?**
 No: puoi eseguirle, abilitarle e sospenderle. Creazione e modifica restano nell'app Vimar.
