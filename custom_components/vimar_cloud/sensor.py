@@ -277,13 +277,14 @@ class VimarDailyTelemetryEnergySensor(SensorEntity):
             if len(today) != count:
                 return None
             
-            # Subito dopo mezzanotte Vimar può restituire None
-            # per la prima ora, prima che sia disponibile una misura.
-            if count == 1 and today[0] is None:
-                return 0.0
+            # Vimar può restituire None per l'ora corrente
+            # finché la misura oraria non è disponibile.
+            # Non consideriamo questo valore nella somma.
+            if today[0] is None:
+                today = today[1:]
             
-            # Nelle altre ore i dati mancanti non vengono
-            # interpretati automaticamente come zero.
+            # I valori mancanti nelle ore precedenti
+            # indicano invece dati incompleti.
             if any(v is None for v in today):
                 return None
     
