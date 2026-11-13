@@ -8,7 +8,7 @@ class ConnectionError(Exception):pass
 root=ast.parse((P/'api.py').read_text())
 cls=next(n for n in root.body if isinstance(n,ast.ClassDef) and n.name=='VimarCloudClient')
 methods=[n for n in cls.body if isinstance(n,ast.AsyncFunctionDef) and n.name in ['_attach_watchdog','_send_command','_connect_and_run']]
-env=dict(asyncio=asyncio,_LOGGER=logging.getLogger('test'),VimarConnectionError=ConnectionError,VimarAuthError=type('AuthError',(Exception,),{}),FUNC_DOACTION='doaction',VIMAR_WS_URL='wss://test',_random_client_token=lambda:'test')
+env=dict(asyncio=asyncio,_LOGGER=logging.getLogger('test'),VimarConnectionError=ConnectionError,VimarAuthError=type('AuthError',(Exception,),{}),FUNC_DOACTION='doaction',VIMAR_WS_URL='wss://test',_random_client_token=lambda:'test',_redact=str)
 exec(compile(ast.fix_missing_locations(ast.Module(body=[ast.ClassDef(name='Client',bases=[],keywords=[],body=methods,decorator_list=[])],type_ignores=[])),'actual_candidate','exec'),env)
 Client=env['Client']
 class Tests(unittest.IsolatedAsyncioTestCase):

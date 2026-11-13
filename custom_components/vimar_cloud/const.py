@@ -7,6 +7,8 @@ VIMAR_CLOUD_HOST = "prod.vimar.cloud"
 VIMAR_AUTH_URL = f"https://{VIMAR_CLOUD_HOST}/auth/realms/vimaruser/protocol/openid-connect/token"
 VIMAR_OAUTH_AUTH_URL = f"https://{VIMAR_CLOUD_HOST}/auth/realms/vimaruser/protocol/openid-connect/auth"
 VIMAR_WS_URL = f"wss://{VIMAR_CLOUD_HOST}/wssmqtt/deviceproxy"
+VIMAR_API_URL = f"https://{VIMAR_CLOUD_HOST}/api/v1"
+VIMAR_NGV_URL = f"https://{VIMAR_CLOUD_HOST}/ngvcloud"
 
 # OAuth2
 VIMAR_CLIENT_ID = "mobile-user-view2"
@@ -15,6 +17,7 @@ VIMAR_REDIRECT_URI = "com.prova.app:/oauth2redirect/example-provide"
 # Config entry keys
 CONF_DUID = "duid"
 CONF_PLANT_UID = "plant_uid"
+CONF_REFRESH_TOKEN = "refresh_token"
 CONF_PLANT_NAME = "plant_name"
 
 # Token
@@ -49,6 +52,10 @@ SFE_CMD_BRIGHTNESS = "SFE_Cmd_Brightness"
 
 # SFE types — energy
 SFE_STATE_GLOBAL_ACTIVE_POWER = "SFE_State_GlobalActivePowerConsumption"
+# Impianti con fotovoltaico (02963 su scambio e produzione).
+# Scambio: positivo = prelievo dalla rete, negativo = immissione in rete.
+SFE_STATE_GLOBAL_ACTIVE_EXCHANGE = "SFE_State_GlobalActivePowerExchange"
+SFE_STATE_GLOBAL_ACTIVE_PRODUCTION = "SFE_State_GlobalActivePowerProduct"
 SFE_STATE_LOADS_PRIORITY = "SFE_State_LoadsPriority"
 SFE_STATE_GLOBAL_THRESHOLD = "SFE_State_GlobalThreshold"
 SFE_CMD_GLOBAL_THRESHOLD = "SFE_Cmd_GlobalThreshold"
@@ -77,6 +84,7 @@ FUNC_DOACTION = "doaction"
 FUNC_CHANGESTATUS = "changestatus"
 FUNC_SFDISCOVERY = "sfdiscovery"
 FUNC_KEEPALIVE = "keepalive"
+FUNC_GETLOG = "getlog"
 
 # SF categories
 SF_CATEGORY_PLANT = "Plant"

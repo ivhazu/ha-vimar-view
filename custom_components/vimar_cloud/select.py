@@ -6,6 +6,7 @@ import logging
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import VimarCloudClient
@@ -14,7 +15,9 @@ from .device_info import device_info_for_idsf
 
 _LOGGER = logging.getLogger(__name__)
 
-LOAD_OPTIONS = [LOAD_STATE_AUTO, LOAD_STATE_FORCED_ON, LOAD_STATE_FORCED_OFF]
+# Modalità che l'utente può impostare. "Forced off" non è un comando valido:
+# lo imposta solo il gateway quando il consumo supera la soglia di distacco.
+SELECTABLE_OPTIONS = [LOAD_STATE_AUTO, LOAD_STATE_FORCED_ON]
 
 
 async def async_setup_entry(
@@ -32,7 +35,6 @@ async def async_setup_entry(
 
 class VimarLoadSelect(SelectEntity):
     _attr_has_entity_name = True
-    _attr_options = LOAD_OPTIONS
 
     def __init__(self, client: VimarCloudClient, idsf: int, entry: ConfigEntry) -> None:
         self._client = client
@@ -53,6 +55,14 @@ class VimarLoadSelect(SelectEntity):
             self.async_write_ha_state()
 
     @property
+    def options(self) -> list[str]:
+        # "Forced off" compare tra le opzioni solo mentre è attivo, così lo stato
+        # viene mostrato correttamente ma non si può selezionare.
+        if self.current_option == LOAD_STATE_FORCED_OFF:
+            return [*SELECTABLE_OPTIONS, LOAD_STATE_FORCED_OFF]
+        return SELECTABLE_OPTIONS
+
+    @property
     def current_option(self):
         state = self._client.get_state(self._idsf, SFE_STATE_LOAD)
         if state is None:
@@ -66,4 +76,11 @@ class VimarLoadSelect(SelectEntity):
         return LOAD_STATE_AUTO
 
     async def async_select_option(self, option: str) -> None:
+        if option not in SELECTABLE_OPTIONS:
+            if option == self.current_option:
+                return  # già attivo, niente da inviare
+            raise ServiceValidationError(
+                f"'{option}' cannot be selected: it is set automatically by the "
+                "Vimar gateway when the disconnect threshold is exceeded"
+            )
         await self._client.set_load(self._idsf, option)

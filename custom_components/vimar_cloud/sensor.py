@@ -16,16 +16,19 @@ from homeassistant.const import UnitOfEnergy, UnitOfPower
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.util import dt as dt_util
 
 from .api import VimarCloudClient
 from .const import (
     DOMAIN,
+    SFE_STATE_GLOBAL_ACTIVE_EXCHANGE,
     SFE_STATE_GLOBAL_ACTIVE_POWER,
+    SFE_STATE_GLOBAL_ACTIVE_PRODUCTION,
     SFE_STATE_GLOBAL_THRESHOLD,
     SFE_STATE_LOAD,
     MAX_ENERGY_SAMPLE_GAP,
 )
-from .device_info import device_info_for_idsf, energy_manager_device_info
+from .device_info import device_info_for_idsf, energy_manager_device_info, gateway_device_info
 from .energy import integrate_power_delta_kwh
 
 _LOGGER = logging.getLogger(__name__)
@@ -46,6 +49,18 @@ async def async_setup_entry(
             em_info = energy_manager_device_info(entry, client)
             entities.append(VimarPowerSensor(client, idsf, "Consumo Totale", em_info, f"{DOMAIN}_{idsf}_total_power"))
             entities.append(VimarEnergySensor(client, idsf, "Consumo Totale kWh", em_info, f"{DOMAIN}_{idsf}_total_kwh"))
+            # Fotovoltaico: solo se il gateway espone questi valori (02963 su scambio/produzione).
+            em_sfetypes = device.get("sfetypes", [])
+            if SFE_STATE_GLOBAL_ACTIVE_EXCHANGE in em_sfetypes:
+                entities.append(VimarPowerSensor(
+                    client, idsf, "Scambio Rete", em_info, f"{DOMAIN}_{idsf}_grid_power",
+                    sfetype=SFE_STATE_GLOBAL_ACTIVE_EXCHANGE,
+                ))
+            if SFE_STATE_GLOBAL_ACTIVE_PRODUCTION in em_sfetypes:
+                entities.append(VimarPowerSensor(
+                    client, idsf, "Produzione Fotovoltaica", em_info, f"{DOMAIN}_{idsf}_solar_power",
+                    sfetype=SFE_STATE_GLOBAL_ACTIVE_PRODUCTION,
+                ))
             entities.append(VimarThresholdSensor(client, idsf, "Soglia Alert", 0, em_info, f"{DOMAIN}_{idsf}_threshold_alert"))
             entities.append(VimarThresholdSensor(client, idsf, "Soglia Distacco", 1, em_info, f"{DOMAIN}_{idsf}_threshold_disconnect"))
 
@@ -60,6 +75,29 @@ async def async_setup_entry(
             entities.append(VimarAutomationPowerSensor(client, idsf, dev_info, entry))
             entities.append(VimarAutomationEnergySensor(client, idsf, dev_info, entry))
 
+    if client.gateway_log is not None:
+        entities.append(VimarGatewayEventSensor(client, entry))
+
+    # kWh di oggi dalla telemetria Vimar (piano a pagamento).
+    if client.telemetry is not None and client.telemetry.series:
+        from .telemetry import SERIES_NAMES
+
+        tele_info = (
+            energy_manager_device_info(entry, client)
+            if client.idsf_energy_manager is not None
+            else gateway_device_info(entry, client)
+        )
+        for sstype, idsf in client.telemetry.series.items():
+            entities.append(VimarTelemetryEnergySensor(
+                client, idsf, SERIES_NAMES[sstype], tele_info,
+                f"{DOMAIN}_{entry.entry_id}_{idsf}_daily_energy",
+            ))
+
+    # Ultima esecuzione di ogni routine (rilevata o avviata da HA).
+    if client.routine_tracker is not None:
+        for routine in client.routine_tracker.routines.values():
+            entities.append(VimarRoutineLastRunSensor(client, routine.ruid, routine.name, entry))
+
     async_add_entities(entities)
 
 
@@ -73,9 +111,18 @@ class VimarPowerSensor(SensorEntity):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfPower.WATT
 
-    def __init__(self, client: VimarCloudClient, idsf: int, name: str, device_info, unique_id: str) -> None:
+    def __init__(
+        self,
+        client: VimarCloudClient,
+        idsf: int,
+        name: str,
+        device_info,
+        unique_id: str,
+        sfetype: str = SFE_STATE_GLOBAL_ACTIVE_POWER,
+    ) -> None:
         self._client = client
         self._idsf = idsf
+        self._sfetype = sfetype
         self._attr_name = name
         self._attr_unique_id = unique_id
         self._attr_device_info = device_info
@@ -93,7 +140,7 @@ class VimarPowerSensor(SensorEntity):
 
     @property
     def native_value(self) -> float | None:
-        value = self._client.get_state(self._idsf, SFE_STATE_GLOBAL_ACTIVE_POWER)
+        value = self._client.get_state(self._idsf, self._sfetype)
         try:
             return float(value) if value is not None else None
         except (ValueError, TypeError):
@@ -361,3 +408,90 @@ class VimarAutomationEnergySensor(RestoreEntity, SensorEntity):
     @property
     def native_value(self) -> float:
         return round(self._accumulated_kwh, 4)
+
+
+class VimarRoutineLastRunSensor(RestoreEntity, SensorEntity):
+    """Data e ora dell'ultima esecuzione di una routine (dedotta per quelle programmate)."""
+
+    _attr_has_entity_name = True
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_icon = "mdi:robot-happy-outline"
+
+    def __init__(self, client: VimarCloudClient, ruid: str, name: str, entry: ConfigEntry) -> None:
+        self._client = client
+        self._ruid = ruid
+        self._attr_name = f"{name} ultima esecuzione"
+        self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_routine_{ruid}_last_run"
+        self._attr_device_info = gateway_device_info(entry, client)
+        self._attr_native_value = None
+
+    async def async_added_to_hass(self) -> None:
+        last = await self.async_get_last_state()
+        if last is not None and last.state not in ("unknown", "unavailable", None):
+            restored = dt_util.parse_datetime(last.state)
+            if restored is not None:
+                self._attr_native_value = restored
+        tracker = self._client.routine_tracker
+        if tracker is not None:
+            self.async_on_remove(tracker.add_listener(self._on_tracker_update))
+
+    @callback
+    def _on_tracker_update(self) -> None:
+        when = self._client.routine_tracker.last_run.get(self._ruid)
+        if when is not None and when != self._attr_native_value:
+            self._attr_native_value = when
+            self.async_write_ha_state()
+
+
+class VimarGatewayEventSensor(SensorEntity):
+    """Ultima voce del registro eventi del gateway (sezione "Eventi" dell'app)."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Ultimo evento"
+    _attr_icon = "mdi:history"
+
+    def __init__(self, client: VimarCloudClient, entry: ConfigEntry) -> None:
+        self._client = client
+        self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_gateway_last_event"
+        self._attr_device_info = gateway_device_info(entry, client)
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(self._client.gateway_log.add_listener(self.async_write_ha_state))
+
+    @property
+    def native_value(self) -> str | None:
+        last = self._client.gateway_log.last
+        return last["message"][:255] if last else None
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        last = self._client.gateway_log.last or {}
+        return {k: v for k, v in last.items() if k != "message"}
+
+
+class VimarTelemetryEnergySensor(SensorEntity):
+    """kWh di oggi misurati da Vimar (telemetria oraria BigData, piano a pagamento)."""
+
+    _attr_has_entity_name = True
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_suggested_display_precision = 2
+
+    def __init__(self, client: VimarCloudClient, idsf: int, name: str, device_info, unique_id: str) -> None:
+        self._client = client
+        self._idsf = idsf
+        self._attr_name = name
+        self._attr_unique_id = unique_id
+        self._attr_device_info = device_info
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(self._client.telemetry.add_listener(self.async_write_ha_state))
+
+    @property
+    def native_value(self) -> float | None:
+        return self._client.telemetry.value(self._idsf)
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"source": "Vimar BigData (Telemetry_G)", "bigdata_idsf": self._idsf}

@@ -3,10 +3,23 @@
     "step": {
       "user": {
         "title": "Configura Vimar View Cloud",
-        "description": "Inserisci le credenziali MyVimar e il DUID del tuo gateway.\n\nIl DUID si trova nell'app Vimar View: Impostazioni → Info gateway. Formato esempio: 000000AAA00000",
+        "description": "Inserisci le credenziali MyVimar (le stesse dell'app View). Nel passaggio successivo potrai scegliere il gateway o il termostato da aggiungere.",
         "data": {
           "username": "Email MyVimar",
-          "password": "Password MyVimar",
+          "password": "Password MyVimar"
+        }
+      },
+      "gateway": {
+        "title": "Scegli il dispositivo",
+        "description": "Sul tuo account ci sono più gateway o termostati. Scegli quello da aggiungere: per aggiungerne altri, ripeti la configurazione.",
+        "data": {
+          "duid": "Gateway / termostato"
+        }
+      },
+      "manual": {
+        "title": "DUID del gateway",
+        "description": "Non è stato possibile leggere l'elenco dei gateway dal cloud. Inserisci il DUID a mano: nell'app Vimar View vai in Impostazioni → Info di sistema, è il codice BLEG (formato 000000AAA00000).",
+        "data": {
           "duid": "DUID Gateway"
         }
       }
@@ -16,7 +29,28 @@
       "cannot_connect": "Impossibile connettersi al cloud Vimar. Verifica la connessione internet."
     },
     "abort": {
-      "already_configured": "Il gateway è già configurato."
+      "already_configured": "Il gateway è già configurato.",
+      "all_configured": "Tutti i gateway e termostati del tuo account sono già configurati."
+    }
+  },
+  "services": {
+    "rebuild_energy_history": {
+      "name": "Ricalcola storico energia",
+      "description": "Ricalcola lo storico a lungo termine (dashboard Energia) di un sensore kWh dell'integrazione a partire dallo storico della potenza: per ogni ora, kWh = potenza media / 1000. Le ore successive vengono allineate senza salti.",
+      "fields": {
+        "entity_id": {
+          "name": "Sensore energia",
+          "description": "Sensore kWh dell'integrazione da ricalcolare (per esempio sensor.forno_energia)."
+        },
+        "start": {
+          "name": "Inizio",
+          "description": "Primo orario da ricalcolare (arrotondato all'ora)."
+        },
+        "end": {
+          "name": "Fine",
+          "description": "Fino a quando ricalcolare (escluso). Se vuoto: fino all'ultima ora completa."
+        }
+      }
     }
   }
 }

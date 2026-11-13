@@ -1,0 +1,17 @@
+rebuild_energy_history:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: vimar_cloud
+          domain: sensor
+          device_class: energy
+    start:
+      required: true
+      selector:
+        datetime:
+    end:
+      required: false
+      selector:
+        datetime:

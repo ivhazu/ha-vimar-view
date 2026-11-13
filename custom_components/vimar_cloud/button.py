@@ -6,11 +6,13 @@ import logging
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .api import VimarCloudClient
+from .api import VimarCloudClient, VimarConnectionError
+from .routines import SOURCE_HOME_ASSISTANT
 from .const import DOMAIN
-from .device_info import device_info_for_idsf, energy_manager_device_info
+from .device_info import device_info_for_idsf, energy_manager_device_info, gateway_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,6 +33,16 @@ async def async_setup_entry(
 
     if client.idsf_energy_manager is not None:
         entities.append(VimarRestoreAllLoadsButton(client, entry))
+
+    # Routine dell'app VIEW (API REST): un errore qui non deve bloccare il resto.
+    try:
+        routines = await client.load_routines()
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.warning("Vimar: could not load routines: %s", err)
+        routines = []
+    _LOGGER.debug("Vimar: %d routines found", len(routines))
+    for routine in routines:
+        entities.append(VimarRoutineButton(client, routine, entry))
 
     async_add_entities(entities)
 
@@ -86,3 +98,26 @@ class VimarSceneButton(ButtonEntity):
 
     async def async_press(self) -> None:
         await self._client.execute_scene(self._idsf)
+
+
+class VimarRoutineButton(ButtonEntity):
+    """Esegue una routine creata nell'app Vimar VIEW."""
+
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:robot"
+
+    def __init__(self, client: VimarCloudClient, routine: dict, entry: ConfigEntry) -> None:
+        self._client = client
+        self._ruid: str = routine["ruid"]
+        self._attr_name = routine.get("name") or "Routine"
+        self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_routine_{self._ruid}"
+        self._attr_device_info = gateway_device_info(entry, client)
+        self._attr_extra_state_attributes = {"attiva": bool(routine.get("isActive", True))}
+
+    async def async_press(self) -> None:
+        try:
+            await self._client.execute_routine(self._ruid)
+        except (VimarConnectionError, TimeoutError) as err:
+            raise HomeAssistantError(f"Vimar routine '{self.name}' failed: {err}") from err
+        if self._client.routine_tracker is not None:
+            self._client.routine_tracker.mark_executed(self._ruid, SOURCE_HOME_ASSISTANT)

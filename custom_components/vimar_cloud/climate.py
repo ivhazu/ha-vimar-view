@@ -39,6 +39,11 @@ from .device_info import device_info_for_idsf
 
 _LOGGER = logging.getLogger(__name__)
 
+# HA 2026.11 ha rinominato le proprietà di temperatura del climate con il prefisso
+# native_ (i vecchi nomi verranno rimossi in 2027.11). Sulle versioni precedenti
+# esistono solo i vecchi nomi: li usiamo come alias (vedi fondo della classe).
+_HAS_NATIVE_TEMPERATURE = hasattr(ClimateEntity, "native_current_temperature")
+
 PRESET_SCHEDULE = "Programma"     # Auto — segue il programma settimanale
 PRESET_MANUAL = "Manuale"         # Timed manual — override temporaneo
 PRESET_PERMANENT = "Permanente"   # Manual — override manuale permanente
@@ -78,7 +83,7 @@ class VimarClimate(ClimateEntity):
     """Rappresenta una zona clima Vimar (SS_Clima_Zone)."""
 
     _attr_has_entity_name = True
-    _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL]
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE
@@ -116,7 +121,7 @@ class VimarClimate(ClimateEntity):
     # ─── Lettura stato ────────────────────────────────────────────────────────
 
     @property
-    def current_temperature(self) -> float | None:
+    def native_current_temperature(self) -> float | None:
         value = self._client.get_state(self._idsf, SFE_STATE_AMBIENT_TEMPERATURE)
         try:
             return float(value) if value is not None else None
@@ -124,7 +129,7 @@ class VimarClimate(ClimateEntity):
             return None
 
     @property
-    def target_temperature(self) -> float | None:
+    def native_target_temperature(self) -> float | None:
         value = self._client.get_state(self._idsf, SFE_STATE_AMBIENT_SETPOINT)
         try:
             return float(value) if value is not None else None
@@ -205,3 +210,9 @@ class VimarClimate(ClimateEntity):
         """
         vimar_mode = PRESET_TO_VIMAR_MODE.get(preset_mode, HVAC_MODE_VIMAR_AUTO)
         await self._client.set_climate_hvac_mode(self._idsf, vimar_mode)
+
+    # Compatibilità con Home Assistant < 2026.11 (senza le proprietà native_*)
+    if not _HAS_NATIVE_TEMPERATURE:
+        _attr_temperature_unit = UnitOfTemperature.CELSIUS
+        current_temperature = native_current_temperature
+        target_temperature = native_target_temperature

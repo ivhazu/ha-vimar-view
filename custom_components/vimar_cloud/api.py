@@ -22,6 +22,7 @@ from .const import (
     FUNC_DETACH,
     FUNC_DOACTION,
     FUNC_GETSTATUS,
+    FUNC_GETLOG,
     FUNC_KEEPALIVE,
     FUNC_REGISTER,
     FUNC_SFDISCOVERY,
@@ -64,6 +65,8 @@ from .const import (
     SHUTTER_CMD_OPEN,
     SHUTTER_CMD_STOP,
     TOKEN_REFRESH_MARGIN,
+    VIMAR_API_URL,
+    VIMAR_NGV_URL,
     VIMAR_AUTH_URL,
     VIMAR_CLIENT_ID,
     VIMAR_OAUTH_AUTH_URL,
@@ -79,6 +82,19 @@ IDSF_PAIR_OFFSET = 8  # Measure idsf = Load idsf + 8
 
 class VimarAuthError(Exception):
     """Authentication error."""
+
+
+def _is_temporary_http_error(status: int) -> bool:
+    """5xx o 429: problema temporaneo del cloud Vimar, non credenziali errate."""
+    return status >= 500 or status == 429
+
+
+_SECRET_QUERY_RE = re.compile(r"(access_token|duid)=[^&\s'\"]+")
+
+
+def _redact(text: object) -> str:
+    """Nasconde token e DUID negli URL prima di scriverli nel log."""
+    return _SECRET_QUERY_RE.sub(r"\1=***", str(text))
 
 
 class VimarConnectionError(Exception):
@@ -136,6 +152,11 @@ class VimarCloudClient:
         self.idsf_energy_manager: int | None = None
 
         self.plant_name: str = ""
+        self.plant_uid: str = plant_uid
+        self.routines: list[dict] | None = None
+        self.routine_tracker: Any = None  # RoutineTracker, impostato in __init__.py
+        self.gateway_log: Any = None  # GatewayLogWatcher, impostato in __init__.py
+        self._routines_lock = asyncio.Lock()
         self.gateway_sw_version: str = ""
         self.gateway_mac: str = ""
         self.gateway_device_id: str | None = None
@@ -145,6 +166,10 @@ class VimarCloudClient:
         self._running = False
         self._keepalive_task: asyncio.Task | None = None
         self._discovery_callback: Callable | None = None
+        # Discovery BigData (telemetria energia): elenco delle serie e segnale di arrivo.
+        self.bigdata_sfs: list[dict] = []
+        self.bigdata_received = asyncio.Event()
+        self.telemetry: Any = None  # TelemetryManager, impostato in __init__.py
         self._token_lock = asyncio.Lock()
         self._pending_requests: dict[str, asyncio.Future[dict[str, Any]]] = {}
         self._request_timeout = 15.0
@@ -166,6 +191,14 @@ class VimarCloudClient:
                 token = await self._refresh_access_token()
                 _LOGGER.debug("Vimar auth: refresh token succeeded")
                 return token
+            except VimarConnectionError:
+                # Cloud temporaneamente non disponibile: niente login completo
+                # (genera una mail a ogni tentativo), riprova il loop di riconnessione.
+                raise
+            except (aiohttp.ClientError, asyncio.TimeoutError) as err:
+                raise VimarConnectionError(
+                    f"Refresh token request failed ({type(err).__name__})"
+                ) from err
             except Exception as err:
                 _LOGGER.warning(
                     "Vimar: refresh token failed, doing full login (%s)",
@@ -199,6 +232,8 @@ class VimarCloudClient:
                 VIMAR_OAUTH_AUTH_URL, params=auth_params, allow_redirects=True
             ) as resp:
                 if resp.status != 200:
+                    if _is_temporary_http_error(resp.status):
+                        raise VimarConnectionError(f"Login page unavailable ({resp.status})")
                     raise VimarAuthError(f"Login page failed ({resp.status})")
                 login_page = await resp.text()
                 login_url = str(resp.url)
@@ -261,6 +296,8 @@ class VimarCloudClient:
             }
             async with session.post(VIMAR_AUTH_URL, data=token_data) as resp:
                 if resp.status != 200:
+                    if _is_temporary_http_error(resp.status):
+                        raise VimarConnectionError(f"Token exchange unavailable ({resp.status})")
                     raise VimarAuthError(f"Token exchange failed ({resp.status})")
                 tokens = await resp.json()
                 if not isinstance(tokens, dict) or not tokens.get("access_token"):
@@ -282,6 +319,8 @@ class VimarCloudClient:
             }
             async with session.post(VIMAR_AUTH_URL, data=data) as resp:
                 if resp.status != 200:
+                    if _is_temporary_http_error(resp.status):
+                        raise VimarConnectionError(f"Refresh token unavailable ({resp.status})")
                     raise VimarAuthError(f"Refresh token failed ({resp.status})")
                 token_data = await resp.json()
                 if not isinstance(token_data, dict) or not token_data.get("access_token"):
@@ -335,7 +374,7 @@ class VimarCloudClient:
         *,
         wait_response: bool = False,
         timeout: float | None = None,
-    ) -> str:
+    ) -> Any:
         msgid = self._next_msgid()
         msg = {
             "type": "request",
@@ -365,6 +404,8 @@ class VimarCloudClient:
         finally:
             if future is not None and future.done():
                 self._pending_requests.pop(msgid, None)
+        if future is not None:
+            return future.result()  # messaggio di risposta completo
         return msgid
 
     async def _send_command(self, args: list, timeout: float | None = None) -> None:
@@ -431,6 +472,7 @@ class VimarCloudClient:
         msg_type = msg.get("type")
         function = msg.get("function")
         error = msg.get("error", 0)
+        _LOGGER.debug("Vimar: received %s %s (error=%s)", msg_type, function, error)
 
         if error != 0:
             _LOGGER.error("Vimar: error in %s: %s", function, msg.get("result"))
@@ -461,10 +503,13 @@ class VimarCloudClient:
             future.set_result(msg)
 
         if function == FUNC_ATTACH:
+            if not result:
+                _LOGGER.warning("Vimar: attach response without data, discovery not started")
             if result:
                 info = result[0]
                 self._session_token = info.get("token")
                 self.plant_name = info.get("plantname", "")
+                self.plant_uid = info.get("plantuid") or self.plant_uid
                 srv = info.get("serverinfo", {})
                 self.gateway_sw_version = srv.get("softwareversion", "")
                 self.gateway_mac = srv.get("mac", "")
@@ -475,6 +520,8 @@ class VimarCloudClient:
                 await self._process_plant_discovery(result)
             else:
                 _LOGGER.debug("Vimar: BigData discovery: %s", json.dumps(result)[:500])
+                self.bigdata_sfs = [sf for sf in result if isinstance(sf, dict) and isinstance(sf.get("idsf"), int)]
+                self.bigdata_received.set()
 
         elif function == FUNC_GETSTATUS:
             await self._process_status_update(result)
@@ -595,10 +642,19 @@ class VimarCloudClient:
 
         await self._register_idsf(idsf_to_register)
 
+        _LOGGER.debug("Vimar: plant discovery complete, %d devices", len(self.devices))
+        if self._discovery_callback:
+            self._discovery_callback()
+            self._discovery_callback = None
+
+        # Questo codice gira dentro il loop che legge i messaggi del WebSocket:
+        # qui NON bisogna attendere risposte (wait_response), altrimenti il loop
+        # resta bloccato fino al timeout e la discovery arriva in ritardo.
         for measure_idsf in self.measure_to_load.keys():
             try:
-                await self._send_command(
-                    [{"idsf": measure_idsf, "sfetype": SFE_CMD_TIMED_DYNAMIC_MODE, "value": "Start"}]
+                await self._send_request(
+                    FUNC_DOACTION,
+                    [{"idsf": measure_idsf, "sfetype": SFE_CMD_TIMED_DYNAMIC_MODE, "value": "Start"}],
                 )
             except Exception:
                 pass
@@ -607,10 +663,6 @@ class VimarCloudClient:
             await self._send_request(FUNC_SFDISCOVERY, [{"sfcategory": SF_CATEGORY_BIGDATA}])
         except Exception:
             pass
-
-        if self._discovery_callback:
-            self._discovery_callback()
-            self._discovery_callback = None
 
     def _classify_device(self, sfetypes: list[str], sstype: str) -> str:
         if sstype == "SS_Clima_Zone":
@@ -811,6 +863,7 @@ class VimarCloudClient:
             try:
                 token = await self._get_token()
                 ws_url = f"{VIMAR_WS_URL}?duid={self._duid}&access_token={token}"
+                _LOGGER.debug("Vimar: opening WebSocket")
 
                 async with aiohttp.ClientSession() as session:
                     async with session.ws_connect(
@@ -831,6 +884,7 @@ class VimarCloudClient:
                         attach_watchdog = asyncio.create_task(self._attach_watchdog(ws))
 
                         self._keepalive_task = asyncio.create_task(self._keepalive_loop())
+                        _LOGGER.debug("Vimar: WebSocket connected, sending attach")
                         await self._attach()
 
                         async for msg in ws:
@@ -848,7 +902,7 @@ class VimarCloudClient:
                 self._running = False
                 return
             except Exception as err:
-                _LOGGER.error("Vimar: connection error: %s", err)
+                _LOGGER.error("Vimar: connection error: %s", _redact(err))
             finally:
                 if attach_watchdog is not None:
                     attach_watchdog.cancel()
@@ -876,6 +930,107 @@ class VimarCloudClient:
             except Exception as err:
                 _LOGGER.warning("Vimar: keepalive failed: %s", err)
                 break
+
+    # ─── REST API (routine) ──────────────────────────────────────────────────
+
+    async def _api_request(
+        self, method: str, path: str, json_body: Any = None, *, base_url: str = VIMAR_API_URL
+    ) -> Any:
+        """Chiamata REST a prod.vimar.cloud/api/v1 con il token OAuth corrente."""
+        token = await self._get_token()
+        timeout = aiohttp.ClientTimeout(total=HTTP_TIMEOUT_SECONDS, connect=10)
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "User-Agent": USER_AGENT,
+            "Accept": "application/json",
+        }
+        try:
+            async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
+                async with session.request(method, f"{base_url}{path}", json=json_body) as resp:
+                    if resp.status == 204:
+                        return None
+                    if resp.status != 200:
+                        raise VimarConnectionError(f"{method} {path} failed ({resp.status})")
+                    return await resp.json(content_type=None)
+        except (aiohttp.ClientError, asyncio.TimeoutError) as err:
+            raise VimarConnectionError(f"{method} {path} failed ({type(err).__name__})") from err
+
+    async def request_status(self, items: list[dict]) -> None:
+        """getstatus con attesa della risposta (gli stati finiscono in device_states).
+
+        Va chiamato fuori dal ciclo di lettura del WebSocket.
+        """
+        if self._ws is None or self._ws.closed or not self._session_token:
+            raise VimarConnectionError("Vimar session not ready")
+        await self._send_request(FUNC_GETSTATUS, items, wait_response=True)
+
+    async def get_log(self, from_ts: int, to_ts: int, count: int = 250) -> list[dict]:
+        """Registro eventi del gateway (sezione Eventi dell'app), dal più recente.
+
+        Va chiamato fuori dal ciclo di lettura del WebSocket (attende la risposta).
+        """
+        if self._ws is None or self._ws.closed or not self._session_token:
+            raise VimarConnectionError("Vimar session not ready")
+        args = [{
+            "levels": ["alarm", "error", "warning", "info"],
+            "categories": ["info", "upgrade", "fault", "maintenance"],
+            "from": int(from_ts),
+            "to": int(to_ts),
+            "count": count,
+            "skip": 0,
+        }]
+        msg = await self._send_request(FUNC_GETLOG, args, wait_response=True)
+        if not isinstance(msg, dict):
+            msg = {}
+        result = msg.get("result", [])
+        return [e for e in result if isinstance(e, dict)] if isinstance(result, list) else []
+
+    async def get_gateways(self) -> list[dict]:
+        """Gateway (e termostati) associati all'account: [{"duid", "plantuid", "displayname", "model", ...}]."""
+        data = await self._api_request("GET", "/user/associations", base_url=VIMAR_NGV_URL)
+        if not isinstance(data, list):
+            return []
+        return [g for g in data if isinstance(g, dict) and g.get("duid")]
+
+    @property
+    def refresh_token(self) -> str | None:
+        return self._refresh_token
+
+    async def get_routines(self) -> list[dict]:
+        """Elenco delle routine dell'impianto: [{"ruid", "name", "isActive"}, ...]."""
+        if not self.plant_uid:
+            raise VimarConnectionError("Plant UID not known yet")
+        data = await self._api_request("GET", f"/plants/{self.plant_uid}/routines")
+        routines = data.get("routines", []) if isinstance(data, dict) else []
+        return [r for r in routines if isinstance(r, dict) and r.get("ruid")]
+
+    async def get_routine(self, ruid: str) -> dict:
+        """Dettaglio di una routine: trigger e azioni."""
+        if not self.plant_uid:
+            raise VimarConnectionError("Plant UID not known yet")
+        data = await self._api_request("GET", f"/plants/{self.plant_uid}/routines/{ruid}")
+        return data if isinstance(data, dict) else {}
+
+    async def set_routine_active(self, ruid: str, active: bool) -> None:
+        """Abilita o sospende una routine (come l'interruttore nell'app VIEW)."""
+        if not self.plant_uid:
+            raise VimarConnectionError("Plant UID not known yet")
+        await self._api_request(
+            "PATCH", f"/plants/{self.plant_uid}/routines/{ruid}", {"isActive": bool(active)}
+        )
+
+    async def load_routines(self) -> list[dict]:
+        """Elenco delle routine letto una sola volta e condiviso tra le piattaforme."""
+        async with self._routines_lock:
+            if self.routines is None:
+                self.routines = await self.get_routines()
+        return self.routines
+
+    async def execute_routine(self, ruid: str) -> None:
+        """Esegue subito una routine (come il pulsante nell'app VIEW)."""
+        if not self.plant_uid:
+            raise VimarConnectionError("Plant UID not known yet")
+        await self._api_request("POST", f"/plants/{self.plant_uid}/routines/{ruid}/execute")
 
     async def disconnect(self) -> None:
         self._running = False

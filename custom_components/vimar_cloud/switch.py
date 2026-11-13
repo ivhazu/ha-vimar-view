@@ -7,11 +7,12 @@ from typing import Any
 from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .api import VimarCloudClient
+from .api import VimarCloudClient, VimarConnectionError
 from .const import DOMAIN, SFE_STATE_ONOFF
-from .device_info import device_info_for_idsf
+from .device_info import device_info_for_idsf, gateway_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -27,6 +28,15 @@ async def async_setup_entry(
         for idsf, device in client.devices.items()
         if device.get("device_type") == "automation_switch"
     ]
+
+    # Interruttore "abilitata" per ogni routine dell'app VIEW.
+    try:
+        routines = await client.load_routines()
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.warning("Vimar: could not load routines: %s", err)
+        routines = []
+    entities.extend(VimarRoutineActiveSwitch(client, r, entry) for r in routines)
+
     async_add_entities(entities)
 
 
@@ -70,3 +80,46 @@ class VimarAutomationSwitch(SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self._client.turn_off_automation(self._idsf)
+
+
+class VimarRoutineActiveSwitch(SwitchEntity):
+    """Abilita o sospende una routine dell'app VIEW."""
+
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:robot-outline"
+
+    def __init__(self, client: VimarCloudClient, routine: dict, entry: ConfigEntry) -> None:
+        self._client = client
+        self._ruid: str = routine["ruid"]
+        self._attr_name = f"{routine.get('name') or 'Routine'} abilitata"
+        self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_routine_{self._ruid}_active"
+        self._attr_device_info = gateway_device_info(entry, client)
+        self._attr_is_on = bool(routine.get("isActive", True))
+
+    async def async_added_to_hass(self) -> None:
+        tracker = self._client.routine_tracker
+        if tracker is not None:
+            self.async_on_remove(tracker.add_listener(self._on_tracker_update))
+
+    @callback
+    def _on_tracker_update(self) -> None:
+        active = self._client.routine_tracker.is_active(self._ruid)
+        if active is not None and active != self._attr_is_on:
+            self._attr_is_on = active
+            self.async_write_ha_state()
+
+    async def _set_active(self, active: bool) -> None:
+        try:
+            await self._client.set_routine_active(self._ruid, active)
+        except (VimarConnectionError, TimeoutError) as err:
+            raise HomeAssistantError(f"Vimar routine '{self.name}' update failed: {err}") from err
+        self._attr_is_on = active
+        if self._client.routine_tracker is not None:
+            self._client.routine_tracker.set_active(self._ruid, active)
+        self.async_write_ha_state()
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self._set_active(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self._set_active(False)

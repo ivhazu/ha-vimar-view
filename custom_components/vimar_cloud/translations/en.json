@@ -1,0 +1,56 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Vimar View Cloud",
+        "description": "Enter your MyVimar credentials (the same as the View app). In the next step you can choose the gateway or thermostat to add.",
+        "data": {
+          "username": "MyVimar email",
+          "password": "MyVimar password"
+        }
+      },
+      "gateway": {
+        "title": "Choose the device",
+        "description": "Your account has more than one gateway or thermostat. Choose the one to add; repeat the setup to add the others.",
+        "data": {
+          "duid": "Gateway / thermostat"
+        }
+      },
+      "manual": {
+        "title": "Gateway DUID",
+        "description": "The gateway list could not be read from the cloud. Enter the DUID manually: in the Vimar View app go to Settings → System info, it is the BLEG code (format 000000AAA00000).",
+        "data": {
+          "duid": "Gateway DUID"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid credentials. Check your MyVimar email and password.",
+      "cannot_connect": "Cannot connect to the Vimar cloud. Check your internet connection."
+    },
+    "abort": {
+      "already_configured": "This gateway is already configured.",
+      "all_configured": "All gateways and thermostats on your account are already configured."
+    }
+  },
+  "services": {
+    "rebuild_energy_history": {
+      "name": "Rebuild energy history",
+      "description": "Rebuilds the long-term statistics (Energy dashboard) of an integration kWh sensor from the power history: for each hour, kWh = mean power / 1000. Later hours are realigned without jumps.",
+      "fields": {
+        "entity_id": {
+          "name": "Energy sensor",
+          "description": "Integration kWh sensor to rebuild (e.g. sensor.oven_energy)."
+        },
+        "start": {
+          "name": "Start",
+          "description": "First time to rebuild (rounded to the hour)."
+        },
+        "end": {
+          "name": "End",
+          "description": "Rebuild up to this time (excluded). Empty: up to the last full hour."
+        }
+      }
+    }
+  }
+}
