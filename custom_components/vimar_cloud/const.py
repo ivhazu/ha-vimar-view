@@ -53,14 +53,16 @@ SFE_CMD_TIMED_DYNAMIC_MODE = "SFE_Cmd_TimedDynamicMode"
 SFE_STATE_GLOBAL_ACTIVE_EXCHANGE = "SFE_State_GlobalActivePowerExchange"
 SFE_STATE_GLOBAL_ACTIVE_PRODUCT = "SFE_State_GlobalActivePowerProduct"
 
-# Telemetrie energetiche Vimar BigData: ID verificati sull'impianto di test.
+# Serie energetiche Vimar BigData: gli ID vengono scoperti a runtime.
+# sftype identifica la famiglia; sstype identifica la grandezza energetica.
 SFE_STATE_TELEMETRY_G = "SFE_State_Telemetry_G"
-ENERGY_TELEMETRY_IDS = {
-    90000: "Consumo casa giornaliero",
-    90001: "Immissione rete giornaliera",
-    90002: "Produzione fotovoltaica giornaliera",
-    90003: "Autoconsumo giornaliero",
-    90004: "Prelievo rete giornaliero",
+ENERGY_TELEMETRY_SFTYPE = "SF_TelemetryEnergy"
+ENERGY_TELEMETRY_TYPES = {
+    "SS_EnergyConsumption_GL": "Consumo casa giornaliero",
+    "SS_EnergyIntake_GL": "Immissione rete giornaliera",
+    "SS_EnergyProduction_GL": "Produzione fotovoltaica giornaliera",
+    "SS_EnergySelfConsumption_GL": "Autoconsumo giornaliero",
+    "SS_EnergyWithdrawal_GL": "Prelievo rete giornaliero",
 }
 ENERGY_REFRESH_MIN_SECONDS = 600  # Minimo 10 minuti, solo su evento.
 ENERGY_TRIGGER_SFETYPES = frozenset({
