@@ -36,7 +36,7 @@
   "services": {
     "rebuild_energy_history": {
       "name": "Rebuild energy history",
-      "description": "Rebuilds the long-term statistics (Energy dashboard) of an integration kWh sensor from the power history: for each hour, kWh = mean power / 1000. Later hours are realigned without jumps.",
+      "description": "Rebuilds the long-term statistics (Energy dashboard) of an integration kWh sensor from the power history (kWh = mean power of the hour / 1000) or, for the total consumption, from the kWh measured by Vimar. Later hours are realigned without jumps.",
       "fields": {
         "entity_id": {
           "name": "Energy sensor",
@@ -49,7 +49,19 @@
         "end": {
           "name": "End",
           "description": "Rebuild up to this time (excluded). Empty: up to the last full hour."
+        },
+        "source": {
+          "name": "Source",
+          "description": "Where to take the kWh from. Power: the power history in HA. Vimar: kWh measured by Vimar (total consumption only; real hourly values for the last 7 days, daily total spread over the hours up to one year back)."
         }
+      }
+    }
+  },
+  "selector": {
+    "rebuild_source": {
+      "options": {
+        "power": "Power (HA history)",
+        "vimar": "Vimar measurements"
       }
     }
   }

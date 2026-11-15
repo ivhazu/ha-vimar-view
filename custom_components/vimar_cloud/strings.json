@@ -36,7 +36,7 @@
   "services": {
     "rebuild_energy_history": {
       "name": "Ricalcola storico energia",
-      "description": "Ricalcola lo storico a lungo termine (dashboard Energia) di un sensore kWh dell'integrazione a partire dallo storico della potenza: per ogni ora, kWh = potenza media / 1000. Le ore successive vengono allineate senza salti.",
+      "description": "Ricalcola lo storico a lungo termine (dashboard Energia) di un sensore kWh dell'integrazione a partire dallo storico della potenza (kWh = potenza media dell'ora / 1000) oppure, per il consumo totale, dai kWh misurati da Vimar. Le ore successive vengono allineate senza salti.",
       "fields": {
         "entity_id": {
           "name": "Sensore energia",
@@ -49,7 +49,19 @@
         "end": {
           "name": "Fine",
           "description": "Fino a quando ricalcolare (escluso). Se vuoto: fino all'ultima ora completa."
+        },
+        "source": {
+          "name": "Fonte",
+          "description": "Da dove prendere i kWh. Potenza: dallo storico della potenza in HA. Vimar: kWh misurati da Vimar (solo consumo totale; ore vere per gli ultimi 7 giorni, totale giornaliero diviso sulle ore fino a un anno indietro)."
         }
+      }
+    }
+  },
+  "selector": {
+    "rebuild_source": {
+      "options": {
+        "power": "Potenza (storico HA)",
+        "vimar": "Misure Vimar"
       }
     }
   }

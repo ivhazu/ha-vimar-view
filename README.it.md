@@ -310,32 +310,47 @@ Tutti i sensori kWh funzionano con la **dashboard Energia** (**Impostazioni → 
 
 ### Riparare lo storico dell'energia
 
-Se lo storico a lungo termine di un sensore kWh si è rovinato (per esempio per un bug) mentre quello della potenza è corretto, il servizio [`vimar_cloud.rebuild_energy_history`](#servizi) lo ricostruisce partendo dalla potenza.
+Se lo storico a lungo termine di un sensore kWh si è rovinato (per esempio per un bug), il servizio [`vimar_cloud.rebuild_energy_history`](#servizi) lo ricostruisce partendo dallo storico della potenza oppure, per il consumo totale, dai kWh misurati da Vimar.
 
 ## Servizi
 
 ### `vimar_cloud.rebuild_energy_history`
 
-Ricalcola le **statistiche a lungo termine** (i dati orari usati dalla dashboard Energia e dai grafici statistici) di un sensore kWh dell'integrazione partendo dalle statistiche del sensore di potenza corrispondente: per ogni ora, *kWh = potenza media dell'ora (W) / 1000*. Le ore successive all'intervallo ricalcolato vengono allineate, così il grafico non ha salti.
+Ricalcola le **statistiche a lungo termine** (i dati orari usati dalla dashboard Energia e dai grafici statistici) di un sensore kWh dell'integrazione nell'intervallo scelto. Le ore successive all'intervallo vengono allineate, così il grafico non ha salti.
 
 | Campo | Obbligatorio | Descrizione |
 |---|---|---|
 | `entity_id` | sì | Il sensore kWh, per esempio `sensor.forno_energia` |
 | `start` | sì | Primo orario da ricalcolare (arrotondato all'ora) |
 | `end` | no | Fino a quando ricalcolare (escluso). Predefinito: l'ultima ora completa |
+| `source` | no | `power` (predefinito) oppure `vimar`, vedi sotto |
+
+**Da dove arrivano i kWh**
+
+- **`power`**: dalle statistiche a lungo termine del sensore di potenza corrispondente in Home Assistant. Per ogni ora, *kWh = potenza media dell'ora (W) / 1000*. Funziona per tutti i sensori kWh dell'integrazione, ma è buono quanto lo storico della potenza: se Home Assistant era spento le ore mancano (contate come 0); se l'integrazione era disconnessa e il sensore è rimasto fermo sull'ultimo valore, la potenza è piatta e sbagliata.
+- **`vimar`**: dai kWh **misurati da Vimar**, gli stessi dell'app Vimar. Solo per il consumo totale dell'energy manager (`sensor.consumo_totale_kwh`) e solo se esiste il sensore *Consumo oggi*. Vimar fornisce:
+  - per gli **ultimi 7 giorni**, i valori ora per ora;
+  - per i **giorni precedenti** (fino a un anno indietro), solo il totale giornaliero, che viene diviso in parti uguali sulle ore del giorno: i totali del giorno e del mese sono esatti, il grafico orario di quei giorni invece è piatto;
+  - **oggi** non è ancora coperto, quindi le ore di oggi (e gli eventuali giorni che Vimar non ha) vengono prese dallo storico della potenza.
+
+  Usala quando anche lo storico della potenza è sbagliato, per esempio nei periodi in cui Home Assistant era spento.
+
+In entrambi i casi viene ricalcolato solo il totale usato dalla dashboard Energia; le letture del sensore (il valore del grafico dello storico) e il suo totale attuale non vengono modificati.
 
 ```yaml
 action: vimar_cloud.rebuild_energy_history
 data:
-  entity_id: sensor.forno_energia
-  start: "2026-10-01 00:00:00"
+  entity_id: sensor.consumo_totale_kwh
+  start: "2026-09-14 00:00:00"
+  end: "2026-10-01 00:00:00"
+  source: vimar
 response_variable: result
 ```
 
-La risposta indica quante ore e quanti kWh sono stati ricalcolati e quante ore non avevano dati di potenza (contate come 0).
+La risposta indica quante ore e quanti kWh sono stati ricalcolati, quante ore arrivano da Vimar e quante non avevano dati (contate come 0).
 
 > [!CAUTION]
-> Il servizio **sovrascrive** le statistiche dell'energia nell'intervallo scelto: fai prima un backup. Home Assistant conserva le statistiche della potenza come medie orarie, quindi il risultato è un'ottima approssimazione, non una copia esatta dei valori originali. Il totale attuale del sensore non viene modificato.
+> Il servizio **sovrascrive** le statistiche dell'energia nell'intervallo scelto: fai prima un backup. Home Assistant conserva le statistiche della potenza come medie orarie, quindi con la fonte `power` il risultato è un'ottima approssimazione, non una copia esatta dei valori originali.
 
 ## Riferimento eventi
 

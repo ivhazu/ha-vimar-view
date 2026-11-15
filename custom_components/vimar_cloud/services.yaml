@@ -15,3 +15,12 @@ rebuild_energy_history:
       required: false
       selector:
         datetime:
+    source:
+      required: false
+      default: power
+      selector:
+        select:
+          translation_key: rebuild_source
+          options:
+            - power
+            - vimar

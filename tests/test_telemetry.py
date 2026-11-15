@@ -162,3 +162,24 @@ def test_manager_detects_periods(monkeypatch):
     assert m.periods == {90000: ["week"], 90001: ["week", "month", "year"]}
     sent = client.request_status.await_args.args[0]
     assert sent[0]["sfetype"] == ["SFE_State_Telemetry_G", "SFE_State_Telemetry_S", "SFE_State_Telemetry_M"]
+
+
+# ─── Fonte Vimar per rebuild_energy_history ─────────────────────────────────
+
+def test_local_day_hours():
+    assert t.local_day_hours(NOW.date()) == 24
+
+
+def test_vimar_hourly_uses_real_hours_then_daily_spread():
+    from datetime import timedelta
+    # serie oraria: oggi 0..14 = 100 Wh, ieri (12/11) tutte le 24 ore = 50 Wh, l'11/11 solo in parte
+    hourly = t.parse_telemetry(_raw(14, [100.0] * 15 + [50.0] * 24 + [7.0] * 5))
+    daily = {datetime(2026, 11, d, tzinfo=UTC).date(): 2400.0 for d in (10, 11, 12)}
+    start = datetime(2026, 11, 10, 0, tzinfo=UTC)
+    end = datetime(2026, 11, 13, 14, tzinfo=UTC)
+    wh = t.vimar_hourly_wh(hourly, daily, start, end, NOW.date())
+    day = lambda d: [wh.get(datetime(2026, 11, d, h, tzinfo=UTC)) for h in range(24)]
+    assert day(10) == [100.0] * 24          # solo giornaliero → 2400 / 24
+    assert day(11) == [100.0] * 24          # oraria incompleta → giornaliero
+    assert day(12) == [50.0] * 24           # oraria completa → valori veri
+    assert all(wh.get(start + timedelta(days=3, hours=h)) is None for h in range(14))  # oggi escluso

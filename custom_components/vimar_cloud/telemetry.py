@@ -131,6 +131,42 @@ def hourly_day_wh(telemetry: dict | None, day: date) -> float | None:
     return total
 
 
+def local_day_hours(day: date) -> int:
+    """Ore del giorno locale (23 o 25 nei cambi d'ora)."""
+    start = dt_util.start_of_local_day(day)
+    nxt = dt_util.start_of_local_day(day + timedelta(days=1))
+    return round((nxt - start).total_seconds() / 3600)
+
+
+def vimar_hourly_wh(
+    hourly: dict | None, daily: dict[date, float], start: datetime, end: datetime, today: date
+) -> dict[datetime, float]:
+    """Wh ora per ora (chiave = inizio ora in UTC) misurati da Vimar, solo per giorni conclusi.
+
+    Se la serie oraria copre tutto il giorno si usano i valori orari veri (ultimi
+    7 giorni); altrimenti il totale giornaliero viene distribuito in parti uguali
+    sulle ore del giorno. I giorni non coperti da Vimar non compaiono.
+    """
+    result: dict[datetime, float] = {}
+    by_hour: dict[datetime, float] = {}
+    if hourly is not None:
+        last_hour = _last_update_local(hourly).replace(minute=0, second=0, microsecond=0)
+        for index, value in enumerate(hourly["data"]):
+            wh = 0.0 if value is None else _wh(value)
+            if wh is not None:
+                by_hour[dt_util.as_utc(last_hour - timedelta(hours=index))] = wh
+    hour = start
+    while hour < end:
+        day = dt_util.as_local(hour).date()
+        if day < today:
+            if hourly is not None and hourly_day_wh(hourly, day) is not None and hour in by_hour:
+                result[hour] = by_hour[hour]
+            elif day in daily:
+                result[hour] = daily[day] / local_day_hours(day)
+        hour += timedelta(hours=1)
+    return result
+
+
 def period_start(today: date, period: str) -> date:
     if period == PERIOD_WEEK:
         return today - timedelta(days=today.weekday())  # lunedì
@@ -272,8 +308,13 @@ class TelemetryManager:
             return None
         return telemetry
 
-    def period_value(self, idsf: int, period: str) -> float | None:
+    def series_data(self, idsf: int) -> tuple[dict | None, dict[date, float]]:
+        """(serie oraria, Wh per giorno dalle serie giornaliere)."""
         hourly = parse_telemetry(self.client.get_state(idsf, SFE_STATE_TELEMETRY_G))
         daily = daily_values(self._daily_raw(idsf, SFE_STATE_TELEMETRY_M))
         daily.update(daily_values(self._daily_raw(idsf, SFE_STATE_TELEMETRY_S)))
+        return hourly, daily
+
+    def period_value(self, idsf: int, period: str) -> float | None:
+        hourly, daily = self.series_data(idsf)
         return period_kwh(hourly, daily, period, dt_util.now())

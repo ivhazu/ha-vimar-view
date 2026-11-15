@@ -5,6 +5,12 @@ statistiche orarie usate dalla dashboard Energia) di un sensore kWh
 dell'integrazione partendo dallo storico della potenza corrispondente: per ogni
 ora, kWh = potenza media dell'ora (W) / 1000. Utile se lo storico dell'energia è
 stato rovinato da un bug, mentre quello della potenza è corretto (issue #10).
+
+Con `source: vimar` (solo per il consumo totale dell'energy manager) si usano
+invece i kWh misurati da Vimar: valori orari veri per gli ultimi 7 giorni,
+totale giornaliero distribuito sulle ore per i giorni precedenti (fino a 366).
+Utile quando anche lo storico della potenza è sbagliato (HA spento, integrazione
+disconnessa).
 """
 from __future__ import annotations
 
@@ -26,11 +32,16 @@ _LOGGER = logging.getLogger(__name__)
 SERVICE_REBUILD_ENERGY_HISTORY = "rebuild_energy_history"
 ATTR_START = "start"
 ATTR_END = "end"
+ATTR_SOURCE = "source"
+SOURCE_POWER = "power"
+SOURCE_VIMAR = "vimar"
+CONSUMPTION_SSTYPE = "SS_EnergyConsumption_GL"
 
 REBUILD_SCHEMA = vol.Schema({
     vol.Required("entity_id"): cv.entity_id,
     vol.Required(ATTR_START): cv.datetime,
     vol.Optional(ATTR_END): cv.datetime,
+    vol.Optional(ATTR_SOURCE, default=SOURCE_POWER): vol.In([SOURCE_POWER, SOURCE_VIMAR]),
 })
 
 # unique_id del sensore kWh → unique_id del sensore di potenza da cui è calcolato
@@ -118,6 +129,24 @@ async def _async_rebuild(hass: HomeAssistant, call: ServiceCall) -> ServiceRespo
     if start >= end:
         raise ServiceValidationError("The start must be at least one full hour in the past")
 
+    source = call.data.get(ATTR_SOURCE, SOURCE_POWER)
+    vimar_wh: dict[datetime, float] = {}
+    if source == SOURCE_VIMAR:
+        from .telemetry import vimar_hourly_wh
+
+        client = hass.data.get(DOMAIN, {}).get(energy_entry.config_entry_id)
+        telemetry = getattr(client, "telemetry", None)
+        idsf = telemetry.series.get(CONSUMPTION_SSTYPE) if telemetry is not None else None
+        if not (energy_entry.unique_id or "").endswith("_total_kwh") or idsf is None:
+            raise ServiceValidationError(
+                "The Vimar source is available only for the total consumption sensor "
+                "of the energy manager, when Vimar provides the consumption telemetry"
+            )
+        hourly_tel, daily = telemetry.series_data(idsf)
+        vimar_wh = vimar_hourly_wh(hourly_tel, daily, start, end, dt_util.now().date())
+        if not vimar_wh:
+            raise ServiceValidationError("Vimar has no consumption data for the chosen range")
+
     instance = get_instance(hass)
 
     def _read() -> tuple[dict, dict, dict]:
@@ -135,6 +164,9 @@ async def _async_rebuild(hass: HomeAssistant, call: ServiceCall) -> ServiceRespo
     metadata = dict(meta[energy_id][1])
 
     hourly = {_row_start(r): r.get("mean") for r in power.get(power_id, [])}
+    # Fonte Vimar: kWh misurati da Vimar dove ci sono (Wh in un'ora = W medi),
+    # potenza per le ore che Vimar non copre (es. oggi).
+    hourly.update(vimar_wh)
     last_before = energy["before"][-1] if energy["before"] else {}
     base_sum = float(last_before.get("sum") or 0.0)
     base_state = float(last_before.get("state") or 0.0)
@@ -159,7 +191,9 @@ async def _async_rebuild(hass: HomeAssistant, call: ServiceCall) -> ServiceRespo
         "entity_id": energy_id,
         "power_entity_id": power_id,
         "hours": len(rows),
-        "hours_without_power_data": sum(1 for r in rows if hourly.get(r["start"]) is None),
+        "source": source,
+        "hours_from_vimar": sum(1 for r in rows if r["start"] in vimar_wh),
+        "hours_without_data": sum(1 for r in rows if hourly.get(r["start"]) is None),
         "energy_kwh": rebuilt_kwh,
         "adjustment_after_end_kwh": delta,
     }

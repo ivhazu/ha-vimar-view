@@ -310,32 +310,47 @@ All kWh sensors work with the native **Energy dashboard** (**Settings → Dashbo
 
 ### Repairing the energy history
 
-If the long-term history of a kWh sensor got corrupted (for example by a bug) while the power history is fine, the [`vimar_cloud.rebuild_energy_history`](#services) service rebuilds it from the power.
+If the long-term history of a kWh sensor got corrupted (for example by a bug), the [`vimar_cloud.rebuild_energy_history`](#services) service rebuilds it, either from the power history or, for the total consumption, from the kWh measured by Vimar.
 
 ## Services
 
 ### `vimar_cloud.rebuild_energy_history`
 
-Rebuilds the **long-term statistics** (the hourly data used by the Energy dashboard and the statistics graphs) of an integration kWh sensor from the long-term statistics of the matching power sensor: for each hour, *kWh = mean power of the hour (W) / 1000*. Hours after the rebuilt range are shifted so the graph has no jumps.
+Rebuilds the **long-term statistics** (the hourly data used by the Energy dashboard and the statistics graphs) of an integration kWh sensor in the chosen range. Hours after the range are shifted so the graph has no jumps.
 
 | Field | Required | Description |
 |---|---|---|
 | `entity_id` | yes | The kWh sensor, e.g. `sensor.forno_energia` |
 | `start` | yes | First time to rebuild (rounded down to the hour) |
 | `end` | no | Rebuild up to this time (excluded). Default: the last full hour |
+| `source` | no | `power` (default) or `vimar`, see below |
+
+**Where the kWh come from**
+
+- **`power`**: from the long-term statistics of the matching power sensor in Home Assistant. For each hour, *kWh = mean power of the hour (W) / 1000*. Works for every kWh sensor of the integration, but it can only be as good as the power history: if Home Assistant was off, the hours are missing (counted as 0); if the integration was disconnected while the sensor kept its last value, the power is flat and wrong.
+- **`vimar`**: from the kWh **measured by Vimar**, the same values as in the Vimar app. Only for the energy manager's total consumption (`sensor.consumo_totale_kwh`) and only if the *Consumo oggi* sensor exists. Vimar gives:
+  - for the **last 7 days**, the real hourly values;
+  - for **older days** (up to one year back), only the daily total, which is spread evenly over the hours of the day: the daily and monthly totals are exact, while the hourly graph of those days is flat;
+  - **today** is not covered yet, so today's hours (and any day Vimar doesn't have) are taken from the power history.
+
+  Use it when the power history is wrong too, e.g. for periods when Home Assistant was off.
+
+In both cases only the energy total used by the Energy dashboard is rebuilt; the sensor's readings (the value shown in the history graph) and its current total are not changed.
 
 ```yaml
 action: vimar_cloud.rebuild_energy_history
 data:
-  entity_id: sensor.forno_energia
-  start: "2026-10-01 00:00:00"
+  entity_id: sensor.consumo_totale_kwh
+  start: "2026-09-14 00:00:00"
+  end: "2026-10-01 00:00:00"
+  source: vimar
 response_variable: result
 ```
 
-The response tells how many hours and kWh were rebuilt and how many hours had no power data (counted as 0).
+The response tells how many hours and kWh were rebuilt, how many hours came from Vimar and how many had no data at all (counted as 0).
 
 > [!CAUTION]
-> The service **overwrites** the energy statistics in the chosen range. Make a backup first. Power statistics are kept by Home Assistant as hourly means, so the result is a very good approximation, not a bit-exact copy of the original values. The sensor's current total is not changed.
+> The service **overwrites** the energy statistics in the chosen range. Make a backup first. Home Assistant keeps power statistics as hourly means, so the `power` source gives a very good approximation, not a bit-exact copy of the original values.
 
 ## Events reference
 
