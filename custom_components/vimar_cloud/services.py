@@ -65,18 +65,29 @@ def compute_rows(
     end: datetime,
     base_sum: float,
     base_state: float,
+    old_states: dict[datetime, float] | None = None,
 ) -> list[dict]:
-    """Righe orarie {start, state, sum} da `start` (incluso) a `end` (escluso)."""
+    """Righe orarie {start, state, sum} da `start` (incluso) a `end` (escluso).
+
+    Si ricalcola solo `sum` (quello che usa la dashboard Energia). `state` resta
+    la lettura originale del sensore, dove c'era, altrimenti l'ultima nota: se
+    fosse ricalcolato anche lui, alla fine del periodo non combacerebbe più con il
+    valore reale del sensore e nel grafico dello storico comparirebbe un salto.
+    """
+    old_states = old_states or {}
     rows: list[dict] = []
     total = 0.0
+    state = base_state
     hour = start
     while hour < end:
         mean = hourly_mean_w.get(hour)
         if mean is not None and mean > 0:
             total += mean / 1000.0  # W medi su un'ora → kWh
+        if old_states.get(hour) is not None:
+            state = old_states[hour]
         rows.append({
             "start": hour,
-            "state": round(base_state + total, 4),
+            "state": round(state, 4),
             "sum": round(base_sum + total, 4),
         })
         hour += timedelta(hours=1)
@@ -115,10 +126,8 @@ async def _async_rebuild(hass: HomeAssistant, call: ServiceCall) -> ServiceRespo
         before = statistics_during_period(
             hass, start - timedelta(days=31), start, {energy_id}, "hour", None, {"sum", "state"}
         )
-        at_end = statistics_during_period(
-            hass, end - timedelta(hours=1), end, {energy_id}, "hour", None, {"sum"}
-        )
-        return meta, power, {"before": before.get(energy_id, []), "end": at_end.get(energy_id, [])}
+        current = statistics_during_period(hass, start, end, {energy_id}, "hour", None, {"sum", "state"})
+        return meta, power, {"before": before.get(energy_id, []), "current": current.get(energy_id, [])}
 
     meta, power, energy = await instance.async_add_executor_job(_read)
     if energy_id not in meta:
@@ -129,13 +138,14 @@ async def _async_rebuild(hass: HomeAssistant, call: ServiceCall) -> ServiceRespo
     last_before = energy["before"][-1] if energy["before"] else {}
     base_sum = float(last_before.get("sum") or 0.0)
     base_state = float(last_before.get("state") or 0.0)
-    rows = compute_rows(hourly, start, end, base_sum, base_state)
+    old_states = {_row_start(r): r.get("state") for r in energy["current"]}
+    rows = compute_rows(hourly, start, end, base_sum, base_state, old_states)
 
     async_import_statistics(hass, metadata, rows)
 
     # Le ore successive a `end` restano come sono, spostate dello stesso delta,
     # così il grafico non mostra salti al confine.
-    old_end_sum = energy["end"][-1].get("sum") if energy["end"] else None
+    old_end_sum = energy["current"][-1].get("sum") if energy["current"] else None
     delta = round(rows[-1]["sum"] - float(old_end_sum), 4) if old_end_sum is not None else 0.0
     if delta:
         instance.async_adjust_statistics(energy_id, end, delta, metadata.get("unit_of_measurement") or "kWh")

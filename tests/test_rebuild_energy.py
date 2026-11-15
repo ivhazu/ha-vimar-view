@@ -19,7 +19,15 @@ def test_compute_rows_from_hourly_mean_power():
     rows = s.compute_rows(hourly, H0, H0 + timedelta(hours=4), base_sum=10.0, base_state=3.0)
     assert [r["start"] for r in rows] == [H0 + timedelta(hours=i) for i in range(4)]
     assert [r["sum"] for r in rows] == [11.0, 11.5, 11.5, 13.5]  # ora 2 senza dati = 0
-    assert rows[-1]["state"] == 6.5
+    assert [r["state"] for r in rows] == [3.0] * 4  # nessuna lettura originale: resta base_state
+
+
+def test_state_keeps_original_sensor_readings():
+    hourly = {H0 + timedelta(hours=i): 1000.0 for i in range(4)}
+    old = {H0: 100.0, H0 + timedelta(hours=1): 100.4, H0 + timedelta(hours=3): 101.2}
+    rows = s.compute_rows(hourly, H0, H0 + timedelta(hours=4), 50.0, 99.0, old)
+    assert [r["sum"] for r in rows] == [51.0, 52.0, 53.0, 54.0]  # ricalcolato
+    assert [r["state"] for r in rows] == [100.0, 100.4, 100.4, 101.2]  # originale, buco riempito
 
 
 def test_negative_or_missing_power_adds_nothing():
