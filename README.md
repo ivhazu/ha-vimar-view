@@ -79,7 +79,7 @@
 | Load actuator (socket / automation mode) | **14593** | `switch` · `sensor` | On/off, power, energy |
 | Energy meter | **02963** | `sensor` · `number` · `button` | Total power and energy, thresholds, restore all loads; grid exchange and PV production when installed that way |
 | Connected roller shutter | **30804** | `cover` | Open, close, stop, position (also while moving) |
-| Wi-Fi thermostat | **02912** | `climate` · `number` | On/off, heating/cooling, target temperature, all operating modes as presets, advanced setpoints |
+| Wi-Fi thermostat | **02912** | `climate` · `number` · `sensor` | On/off, heating/cooling, target temperature, all operating modes as presets, advanced setpoints |
 | Scenes | — | `button` | Activate the scene (still being tested) |
 
 > [!NOTE]
@@ -162,6 +162,7 @@ Entity names follow the names you gave to devices in the Vimar app, and entity I
 | Entity | Description |
 |---|---|
 | `climate.<name>` | Off / Heat / Cool, target temperature, current temperature, presets |
+| `sensor.<name>_temperatura` | Room temperature measured by the thermostat, for graphs, statistics and automations |
 | `number.<name>_riscaldamento_riduzione` | Heating reduction setpoint (5–25 °C) |
 | `number.<name>_riscaldamento_assenza` | Heating absence setpoint (5–20 °C) |
 | `number.<name>_riscaldamento_protezione_antigelo` | Frost protection threshold (3–10 °C) |

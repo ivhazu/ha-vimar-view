@@ -12,7 +12,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfEnergy, UnitOfPower
+from homeassistant.const import UnitOfEnergy, UnitOfPower, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -20,6 +20,7 @@ from homeassistant.util import dt as dt_util
 
 from .api import VimarCloudClient
 from .const import (
+    SFE_STATE_AMBIENT_TEMPERATURE,
     DOMAIN,
     SFE_STATE_GLOBAL_ACTIVE_EXCHANGE,
     SFE_STATE_GLOBAL_ACTIVE_POWER,
@@ -44,6 +45,10 @@ async def async_setup_entry(
 
     for idsf, device in client.devices.items():
         dt = device.get("device_type")
+
+        if dt == "thermostat":
+            # Temperatura ambiente misurata dal termostato, come sensore a sé (issue #18).
+            entities.append(VimarThermostatTemperatureSensor(client, idsf, entry))
 
         if dt == "energy_manager":
             em_info = energy_manager_device_info(entry, client)
@@ -518,3 +523,40 @@ class VimarTelemetryEnergySensor(SensorEntity):
             "bigdata_idsf": self._idsf,
             "period": self._period,
         }
+
+
+class VimarThermostatTemperatureSensor(SensorEntity):
+    """Temperatura ambiente misurata dal termostato (la stessa della card clima)."""
+
+    _attr_has_entity_name = True
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_suggested_display_precision = 1
+
+    def __init__(self, client: VimarCloudClient, idsf: int, entry: ConfigEntry) -> None:
+        self._client = client
+        self._idsf = idsf
+        self._attr_name = "Temperatura"
+        self._attr_unique_id = f"{entry.entry_id}_{idsf}_temperature"
+        self._attr_device_info = device_info_for_idsf(client, idsf, entry)
+
+    async def async_added_to_hass(self) -> None:
+        self._client.register_state_callback(self._on_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        self._client.unregister_state_callback(self._on_update)
+
+    @callback
+    def _on_update(self, updated: list[int]) -> None:
+        if self._idsf in updated:
+            self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> float | None:
+        value = self._client.get_state(self._idsf, SFE_STATE_AMBIENT_TEMPERATURE)
+        try:
+            temperature = float(value)
+        except (TypeError, ValueError):
+            return None
+        return temperature if math.isfinite(temperature) else None

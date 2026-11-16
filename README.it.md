@@ -79,7 +79,7 @@
 | Attuatore di carico (modalità presa / automazione) | **14593** | `switch` · `sensor` | On/off, potenza, energia |
 | Energy meter | **02963** | `sensor` · `number` · `button` | Potenza ed energia totali, soglie, ripristino di tutti i carichi; scambio con la rete e produzione fotovoltaica se installato così |
 | Tapparella connessa | **30804** | `cover` | Apri, chiudi, stop, posizione (anche durante il movimento) |
-| Termostato Wi-Fi | **02912** | `climate` · `number` | On/off, riscaldamento/raffreddamento, temperatura, tutti i modi come preset, setpoint avanzati |
+| Termostato Wi-Fi | **02912** | `climate` · `number` · `sensor` | On/off, riscaldamento/raffreddamento, temperatura, tutti i modi come preset, setpoint avanzati |
 | Scenari | — | `button` | Attivazione dello scenario (ancora in fase di test) |
 
 > [!NOTE]
@@ -162,6 +162,7 @@ I nomi delle entità seguono i nomi che hai dato ai dispositivi nell'app Vimar, 
 | Entità | Descrizione |
 |---|---|
 | `climate.<nome>` | Spento / Riscaldamento / Raffreddamento, temperatura target e attuale, preset |
+| `sensor.<nome>_temperatura` | Temperatura ambiente misurata dal termostato, per grafici, statistiche e automazioni |
 | `number.<nome>_riscaldamento_riduzione` | Setpoint di riduzione in riscaldamento (5–25 °C) |
 | `number.<nome>_riscaldamento_assenza` | Setpoint di assenza in riscaldamento (5–20 °C) |
 | `number.<nome>_riscaldamento_protezione_antigelo` | Soglia di protezione antigelo (3–10 °C) |
