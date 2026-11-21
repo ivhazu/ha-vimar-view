@@ -12,6 +12,7 @@ from homeassistant.data_entry_flow import FlowResult
 
 from .api import VimarAuthError, VimarCloudClient
 from .const import CONF_DUID, CONF_PLANT_NAME, CONF_PLANT_UID, CONF_REFRESH_TOKEN, DOMAIN
+from .gateway_models import supported_gateways
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -80,10 +81,15 @@ class VimarCloudConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if not gateways:
             return await self.async_step_manual()
 
+        # The account also lists devices such as the TAB 5S video intercom;
+        # these do not expose the gateway Plant discovery protocol.
+        supported = supported_gateways(gateways)
+        if not supported:
+            return self.async_abort(reason="no_supported_gateways")
+
         configured = self._async_current_ids()
         self._gateways = {
-            str(gw["duid"]).upper(): gw for gw in gateways
-            if str(gw["duid"]).upper() not in configured
+            duid: gw for duid, gw in supported.items() if duid not in configured
         }
         if not self._gateways:
             return self.async_abort(reason="all_configured")

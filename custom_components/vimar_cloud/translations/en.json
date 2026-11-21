@@ -30,7 +30,8 @@
     },
     "abort": {
       "already_configured": "This gateway is already configured.",
-      "all_configured": "All gateways and thermostats on your account are already configured."
+      "all_configured": "All gateways and thermostats on your account are already configured.",
+      "no_supported_gateways": "No supported Vimar gateway or thermostat is available on this account. Other associated devices (such as TAB 5S) cannot be added."
     }
   },
   "services": {
