@@ -1,0 +1,28 @@
+name: Vimar inventory regression tests
+
+on:
+  push:
+    branches:
+      - main
+      - "fix/**"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  inventory-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test dependencies
+        run: python -m pip install aiohttp
+      - name: Compile Python sources
+        run: python -m compileall -q custom_components/vimar_cloud tests
+      - name: Run discovery and registry tests
+        run: |
+          python -m unittest discover -s tests -p 'test_cloud_discovery.py' -v
+          python -m unittest discover -s tests -p 'test_inventory.py' -v
