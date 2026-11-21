@@ -14,12 +14,21 @@ from .api import VimarCloudClient
 from .const import CONF_DUID, CONF_PLANT_UID, CONF_REFRESH_TOKEN, DOMAIN
 from .device_info import gateway_device_info
 from .gateway_log import GatewayLogWatcher
-from .inventory import inventory_signature, stale_device_ids, is_conservative_cleanup
+from .inventory import (
+    device_belongs_to_entry,
+    inventory_signature,
+    is_conservative_cleanup,
+    stale_device_ids,
+)
 from .routines import RoutineTracker
 from .services import async_register_services
 from .telemetry import TelemetryManager
 
 _LOGGER = logging.getLogger(__name__)
+
+# Seconds between inventory verifications; a change seen in any discovery
+# (for example after a reconnection) triggers one immediately.
+INVENTORY_CHECK_INTERVAL = 900
 
 PLATFORMS = [Platform.CLIMATE, Platform.LIGHT, Platform.SENSOR,
              Platform.SELECT, Platform.BUTTON, Platform.NUMBER, Platform.COVER, Platform.SWITCH]
@@ -137,6 +146,8 @@ async def _request_confirmed_snapshot(client: VimarCloudClient) -> dict | None:
     try:
         await client.request_plant_discovery()
         await asyncio.wait_for(received.wait(), timeout=20)
+        if not client.discovery_complete:
+            return None
         return inventory_signature(client.devices)
     except (asyncio.TimeoutError, ConnectionError) as err:
         _LOGGER.warning("Vimar: inventory verification skipped: %s", err)
@@ -192,7 +203,7 @@ async def _remove_missing_registry_devices(
     for device_id in stale_ids:
         # Re-check ownership immediately before the irreversible operation.
         device = device_registry.async_get(device_id)
-        if device is None or device.config_entry_id != entry.entry_id:
+        if device is None or not device_belongs_to_entry(device, entry.entry_id):
             continue
 
         affected = [
@@ -221,7 +232,8 @@ async def _monitor_inventory(
     matching fresh replies, preventing transient partial discoveries.
     """
     setup_snapshot = inventory_signature(client.devices)
-    reconciled = False
+    # An incomplete setup discovery is never used to remove devices.
+    reconciled = not client.discovery_complete
 
     while True:
         snapshot = await _request_confirmed_snapshot(client)
@@ -247,6 +259,6 @@ async def _monitor_inventory(
 
         wake.clear()
         try:
-            await asyncio.wait_for(wake.wait(), timeout=300)
+            await asyncio.wait_for(wake.wait(), timeout=INVENTORY_CHECK_INTERVAL)
         except asyncio.TimeoutError:
             pass

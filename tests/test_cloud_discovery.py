@@ -73,6 +73,47 @@ class DiscoveryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(set(self.client.devices), {10})
         changed.assert_not_called()
 
+    async def test_partial_first_discovery_is_used_but_not_trusted(self):
+        await self.client._process_plant_discovery(
+            [{"idambient": 1, "sf": [sf(10, "Luce"), {"name": "Senza idsf"}]}]
+        )
+        self.assertEqual(set(self.client.devices), {10})
+        self.assertFalse(self.client.discovery_complete)
+
+    async def test_partial_later_discovery_keeps_inventory(self):
+        await self.client._process_plant_discovery(plant(sf(10, "Luce"), sf(11, "Presa")))
+        self.assertTrue(self.client.discovery_complete)
+        changed = Mock()
+        self.client.set_inventory_change_callback(changed)
+        await self.client._process_plant_discovery(
+            [{"idambient": 1, "sf": [sf(10, "Luce"), {"name": "Senza idsf"}]}]
+        )
+        self.assertEqual(set(self.client.devices), {10, 11})
+        self.assertTrue(self.client.discovery_complete)
+        changed.assert_not_called()
+
+    async def test_verification_discovery_has_no_side_effects(self):
+        await self.client._process_plant_discovery(plant(
+            sf(50, "Carico", "SS_Energy_Load"),
+            sf(58, "Carico", "SS_Energy_Measure1P"),
+        ))
+        self.client._register_idsf.assert_awaited_once()
+        first_requests = self.client._send_request.await_count
+        self.assertGreater(first_requests, 0)
+
+        await self.client._process_plant_discovery(plant(
+            sf(50, "Carico", "SS_Energy_Load"),
+            sf(58, "Carico", "SS_Energy_Measure1P"),
+        ))
+        self.client._register_idsf.assert_awaited_once()
+        self.assertEqual(self.client._send_request.await_count, first_requests)
+
+    async def test_new_session_registers_again(self):
+        await self.client._process_plant_discovery(plant(sf(10, "Luce")))
+        self.client._session_discovered = False  # as reset by a new attach
+        await self.client._process_plant_discovery(plant(sf(10, "Luce")))
+        self.assertEqual(self.client._register_idsf.await_count, 2)
+
     async def test_energy_measure_pairings_are_recomputed(self):
         await self.client._process_plant_discovery(plant(
             sf(50, "Carico", "SS_Energy_Load"),

@@ -23,6 +23,18 @@ def inventory_signature(devices: dict[int, dict[str, Any]]) -> dict[int, tuple]:
     }
 
 
+def device_belongs_to_entry(device: Any, entry_id: str) -> bool:
+    """Return True when the device registry entry belongs to this config entry.
+
+    Home Assistant 2026.11 gives each device a single ``config_entry_id`` and
+    deprecates ``config_entries``; older releases only provide the latter.
+    """
+    owner = getattr(device, "config_entry_id", None)
+    if owner is not None:
+        return owner == entry_id
+    return set(getattr(device, "config_entries", ()) or ()) == {entry_id}
+
+
 def stale_device_ids(
     registered_devices: Iterable[Any],
     *,
@@ -36,7 +48,7 @@ def stale_device_ids(
     stale: list[str] = []
 
     for device in registered_devices:
-        if device.config_entry_id != entry_id:
+        if not device_belongs_to_entry(device, entry_id):
             continue
         for identifier_domain, identifier in device.identifiers:
             if identifier_domain != domain or not identifier.startswith(prefix):
@@ -47,6 +59,7 @@ def stale_device_ids(
                 break
 
     return sorted(set(stale))
+
 
 def is_conservative_cleanup(stale_count: int, registered_count: int) -> bool:
     """Allow at most two removals and no more than 10% of registered devices.

@@ -36,6 +36,26 @@ class InventoryTests(unittest.TestCase):
             ["removed"],
         )
 
+    def test_pre_2026_11_registry_uses_config_entries(self):
+        # Home Assistant before 2026.11 has no DeviceEntry.config_entry_id.
+        def legacy(device_id, identifiers, config_entries):
+            return SimpleNamespace(
+                id=device_id, identifiers=set(identifiers),
+                config_entries=set(config_entries),
+            )
+
+        devices = [
+            legacy("removed", {("vimar_cloud", "entry1_11")}, {"entry1"}),
+            legacy("shared", {("vimar_cloud", "entry1_12")}, {"entry1", "entry2"}),
+            legacy("other", {("vimar_cloud", "entry1_13")}, {"entry2"}),
+        ]
+        self.assertEqual(
+            inventory.stale_device_ids(
+                devices, entry_id="entry1", discovered_idsfs={42}
+            ),
+            ["removed"],
+        )
+
     def test_replacement_idsf_is_a_new_device(self):
         devices = [
             make_device("old", {("vimar_cloud", "entry1_10134792")}),
