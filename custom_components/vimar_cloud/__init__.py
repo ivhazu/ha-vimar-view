@@ -8,17 +8,27 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 from .api import VimarCloudClient
 from .const import CONF_DUID, CONF_PLANT_UID, CONF_REFRESH_TOKEN, DOMAIN
 from .device_info import gateway_device_info
 from .gateway_log import GatewayLogWatcher
+from .inventory import (
+    device_belongs_to_entry,
+    inventory_signature,
+    is_conservative_cleanup,
+    stale_device_ids,
+)
 from .routines import RoutineTracker
 from .services import async_register_services
 from .telemetry import TelemetryManager
 
 _LOGGER = logging.getLogger(__name__)
+
+# Seconds between inventory verifications; a change seen in any discovery
+# (for example after a reconnection) triggers one immediately.
+INVENTORY_CHECK_INTERVAL = 900
 
 PLATFORMS = [Platform.CLIMATE, Platform.LIGHT, Platform.SENSOR,
              Platform.SELECT, Platform.BUTTON, Platform.NUMBER, Platform.COVER, Platform.SWITCH]
@@ -98,12 +108,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async_register_services(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # A discovery can change while the integration is running (VIEW app or WS
+    # reconnect). Verify fresh cloud snapshots before touching the HA registry.
+    inventory_changed = asyncio.Event()
+    client.set_inventory_change_callback(inventory_changed.set)
+    entry.async_create_background_task(
+        hass,
+        _monitor_inventory(hass, entry, client, inventory_changed),
+        "vimar_cloud_inventory_monitor",
+    )
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     client: VimarCloudClient = hass.data[DOMAIN][entry.entry_id]
+    client.set_inventory_change_callback(None)
+    client.set_discovery_callback(None)
     if client.routine_tracker is not None:
         client.routine_tracker.async_stop()
     if client.gateway_log is not None:
@@ -115,3 +137,128 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
     return unload_ok
+
+
+async def _request_confirmed_snapshot(client: VimarCloudClient) -> dict | None:
+    """Ask the cloud for a fresh inventory; do not trust a cached snapshot."""
+    received = asyncio.Event()
+    client.set_discovery_callback(received.set)
+    try:
+        await client.request_plant_discovery()
+        await asyncio.wait_for(received.wait(), timeout=20)
+        if not client.discovery_complete:
+            return None
+        return inventory_signature(client.devices)
+    except (asyncio.TimeoutError, ConnectionError) as err:
+        _LOGGER.warning("Vimar: inventory verification skipped: %s", err)
+        return None
+    except Exception:
+        _LOGGER.exception("Vimar: inventory verification failed")
+        return None
+    finally:
+        client.set_discovery_callback(None)
+
+
+async def _remove_missing_registry_devices(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    discovered_idsfs: set[int],
+) -> None:
+    """Remove exclusively-owned devices absent from two cloud inventories.
+
+    Never remove a gateway, a virtual energy manager or a device owned by
+    another config entry. This includes user-disabled entities on removed
+    physical devices, but preserves all user overrides on surviving IDs.
+    """
+    device_registry = dr.async_get(hass)
+    entity_registry = er.async_get(hass)
+    registered_devices = dr.async_entries_for_config_entry(
+        device_registry, entry.entry_id
+    )
+    stale_ids = stale_device_ids(
+        registered_devices,
+        entry_id=entry.entry_id,
+        discovered_idsfs=discovered_idsfs,
+        domain=DOMAIN,
+    )
+
+    # A partial cloud result must never wipe a substantial part of a home.
+    registered_count = sum(
+        1 for device in registered_devices
+        if any(
+            domain == DOMAIN and identifier.startswith(f"{entry.entry_id}_")
+            and identifier[len(entry.entry_id) + 1:].isascii()
+            and identifier[len(entry.entry_id) + 1:].isdecimal()
+            for domain, identifier in device.identifiers
+        )
+    )
+    if stale_ids and not is_conservative_cleanup(len(stale_ids), registered_count):
+        _LOGGER.warning(
+            "Vimar: refusing bulk registry cleanup (%d stale of %d physical devices). "
+            "Review the cloud inventory before removing any devices.",
+            len(stale_ids), registered_count,
+        )
+        return
+
+    for device_id in stale_ids:
+        # Re-check ownership immediately before the irreversible operation.
+        device = device_registry.async_get(device_id)
+        if device is None or not device_belongs_to_entry(device, entry.entry_id):
+            continue
+
+        affected = [
+            entity for entity in er.async_entries_for_config_entry(entity_registry, entry.entry_id)
+            if entity.device_id == device_id
+        ]
+        for entity in affected:
+            entity_registry.async_remove(entity.entity_id)
+        device_registry.async_remove_device(device_id)
+        _LOGGER.info(
+            "Vimar: removed stale device %s and %d registry entities",
+            device_id, len(affected),
+        )
+
+
+async def _monitor_inventory(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    client: VimarCloudClient,
+    wake: asyncio.Event,
+) -> None:
+    """Check periodically and on reconnection; require consistent snapshots.
+
+    First confirmation permits cleanup of entries left by prior versions.
+    Subsequent additions/removals/renames cause a reload only after two
+    matching fresh replies, preventing transient partial discoveries.
+    """
+    setup_snapshot = inventory_signature(client.devices)
+    # An incomplete setup discovery is never used to remove devices.
+    reconciled = not client.discovery_complete
+
+    while True:
+        snapshot = await _request_confirmed_snapshot(client)
+        if snapshot is not None and snapshot:
+            if snapshot == setup_snapshot:
+                if not reconciled:
+                    await _remove_missing_registry_devices(hass, entry, set(snapshot))
+                    reconciled = True
+            else:
+                second = await _request_confirmed_snapshot(client)
+                if second == snapshot:
+                    _LOGGER.info("Vimar: verified cloud inventory change; reloading entry")
+                    # Do not await a reload from this entry-owned background task:
+                    # HA cancels entry tasks during unload.
+                    hass.async_create_task(
+                        hass.config_entries.async_reload(entry.entry_id),
+                        f"vimar_cloud_inventory_reload_{entry.entry_id}",
+                    )
+                    return
+                _LOGGER.warning(
+                    "Vimar: inconsistent discovery snapshots, keeping existing registry"
+                )
+
+        wake.clear()
+        try:
+            await asyncio.wait_for(wake.wait(), timeout=INVENTORY_CHECK_INTERVAL)
+        except asyncio.TimeoutError:
+            pass

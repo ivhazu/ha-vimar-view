@@ -166,6 +166,12 @@ class VimarCloudClient:
         self._running = False
         self._keepalive_task: asyncio.Task | None = None
         self._discovery_callback: Callable | None = None
+        self._inventory_change_callback: Callable[[], None] | None = None
+        # True when the last accepted plant discovery contained only valid objects.
+        self.discovery_complete = False
+        # The first discovery of a WebSocket session registers for status pushes
+        # and starts energy telemetry; later verification discoveries do not.
+        self._session_discovered = False
         # Discovery BigData (telemetria energia): elenco delle serie e segnale di arrivo.
         self.bigdata_sfs: list[dict] = []
         self.bigdata_received = asyncio.Event()
@@ -513,6 +519,7 @@ class VimarCloudClient:
                 srv = info.get("serverinfo", {})
                 self.gateway_sw_version = srv.get("softwareversion", "")
                 self.gateway_mac = srv.get("mac", "")
+                self._session_discovered = False
                 await self._send_request(FUNC_SFDISCOVERY, [{"sfcategory": SF_CATEGORY_PLANT}])
 
         elif function == FUNC_SFDISCOVERY:
@@ -550,6 +557,38 @@ class VimarCloudClient:
             elif "idsf" in item:
                 item["_idambient"] = idambient
                 sf_list.append(item)
+
+        # An empty or malformed response is not an authoritative inventory.
+        # Never turn a temporary cloud failure into a removal of HA devices.
+        valid_sfs = [sf for sf in sf_list if isinstance(sf.get("idsf"), int)]
+        skipped = len(sf_list) - len(valid_sfs)
+        if not valid_sfs:
+            _LOGGER.warning("Vimar: ignoring empty plant discovery")
+            return
+        first_in_session = not self._session_discovered
+        if skipped:
+            if not first_in_session:
+                # Keep the current inventory; only the session's first discovery
+                # must be used even when incomplete, so that setup can proceed.
+                _LOGGER.warning(
+                    "Vimar: ignoring incomplete plant discovery (%d objects without idsf)",
+                    skipped,
+                )
+                return
+            _LOGGER.warning(
+                "Vimar: skipped %d plant objects without idsf; automatic cleanup disabled",
+                skipped,
+            )
+        sf_list = valid_sfs
+        self._session_discovered = True
+        self.discovery_complete = not skipped
+
+        previous_devices = self.devices
+        # Replace each snapshot rather than retaining objects removed in VIEW.
+        self.devices = {}
+        self.measure_to_load = {}
+        self.automation_to_measure = {}
+        self.idsf_energy_manager = None
 
         load_idsfs: set[int] = set()
         automation_by_ambient_name: dict[tuple[Any, str], int] = {}
@@ -640,12 +679,37 @@ class VimarCloudClient:
             if reg_sfetypes:
                 idsf_to_register.append({"idsf": idsf, "sfetype": reg_sfetypes})
 
-        await self._register_idsf(idsf_to_register)
+        if first_in_session:
+            await self._register_idsf(idsf_to_register)
+
+        # Preserve status history only for objects still present in the plant.
+        active_idsfs = set(self.devices) | set(self.measure_to_load)
+        self.device_states = {
+            idsf: state for idsf, state in self.device_states.items()
+            if idsf in active_idsfs
+        }
 
         _LOGGER.debug("Vimar: plant discovery complete, %d devices", len(self.devices))
         if self._discovery_callback:
-            self._discovery_callback()
+            callback = self._discovery_callback
             self._discovery_callback = None
+            callback()
+
+        if (
+            self.discovery_complete
+            and previous_devices
+            and previous_devices != self.devices
+            and self._inventory_change_callback
+        ):
+            try:
+                self._inventory_change_callback()
+            except Exception:
+                _LOGGER.exception("Vimar: inventory-change callback failed")
+
+        if not first_in_session:
+            # Verification discovery: the session is already registered and the
+            # telemetry already started. A real change leads to an entry reload.
+            return
 
         # Questo codice gira dentro il loop che legge i messaggi del WebSocket:
         # qui NON bisogna attendere risposte (wait_response), altrimenti il loop
@@ -750,8 +814,18 @@ class VimarCloudClient:
         except ValueError:
             pass
 
-    def set_discovery_callback(self, callback: Callable) -> None:
+    def set_discovery_callback(self, callback: Callable[[], None] | None) -> None:
         self._discovery_callback = callback
+
+    def set_inventory_change_callback(self, callback: Callable[[], None] | None) -> None:
+        """Notify Home Assistant when a subsequent cloud snapshot changes."""
+        self._inventory_change_callback = callback
+
+    async def request_plant_discovery(self) -> None:
+        """Request another complete plant inventory without blocking the WS reader."""
+        if self._ws is None or self._ws.closed or not self._session_token:
+            raise VimarConnectionError("Vimar session not ready")
+        await self._send_request(FUNC_SFDISCOVERY, [{"sfcategory": SF_CATEGORY_PLANT}])
 
     def get_state(self, idsf: int, sfetype: str) -> Any | None:
         return self.device_states.get(idsf, {}).get(sfetype)
