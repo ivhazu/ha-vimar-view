@@ -28,7 +28,8 @@ def test_native_values():
     ent = _entity({SFE_STATE_AMBIENT_TEMPERATURE: "20.5", SFE_STATE_AMBIENT_SETPOINT: "21"})
     assert ent.native_current_temperature == 20.5
     assert ent.native_target_temperature == 21.0
-    assert climate.VimarClimate._attr_native_temperature_unit == UnitOfTemperature.CELSIUS
+    # Da HA 2026.11 gli _attr_* sono property: va letto sull'istanza, non sulla classe.
+    assert ent._attr_native_temperature_unit == UnitOfTemperature.CELSIUS
 
 
 def test_invalid_values_are_none():
