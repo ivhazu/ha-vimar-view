@@ -85,6 +85,9 @@
 > [!NOTE]
 > The **14593** actuator can be set up in the Vimar app either as **load management** (with protection) or as a **socket/automation** (plain on/off): the entities depend on that choice. Switches **14592** and relay modules **03981** look the same to the cloud, so both appear as lights.
 
+> [!TIP]
+> **Video intercoms** (Elvox TAB 5S, TAB 7S…) are not part of Vimar View and are not supported here. For those, have a look at the third-party project [ha-vimar-intercom](https://github.com/ha-vimar/ha-vimar-intercom).
+
 Have a device that is not listed? See [Contributing](#contributing): a short traffic capture is usually enough to add it.
 
 ## Requirements

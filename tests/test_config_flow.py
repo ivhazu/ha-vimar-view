@@ -23,7 +23,10 @@ def _flow(configured=()):
     flow._abort_if_unique_id_configured = MagicMock()
     flow.async_create_entry = lambda title, data: {"type": "create_entry", "title": title, "data": data}
     flow.async_show_form = lambda **kw: {"type": "form", **kw}
-    flow.async_abort = lambda reason: {"type": "abort", "reason": reason}
+    flow.async_abort = lambda reason, description_placeholders=None: (
+        {"type": "abort", "reason": reason}
+        | ({"placeholders": description_placeholders} if description_placeholders else {})
+    )
     return flow
 
 
@@ -65,7 +68,8 @@ def test_video_intercom_does_not_appear_in_gateway_choices():
 
 def test_only_video_intercom_has_no_supported_gateways():
     res = _run(_flow(), [TAB])
-    assert res == {"type": "abort", "reason": "no_supported_gateways"}
+    assert res["reason"] == "no_supported_gateways"
+    assert "ha-vimar-intercom" in res["placeholders"]["intercom_url"]
 
 
 def test_configured_gateway_and_video_intercom_aborts_cleanly():

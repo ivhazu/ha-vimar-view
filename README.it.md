@@ -85,6 +85,9 @@
 > [!NOTE]
 > L'attuatore **14593** si può configurare nell'app Vimar come **gestione carico** (con protezione) oppure come **presa/automazione** (semplice on/off): le entità dipendono da questa scelta. Deviatori **14592** e moduli relè **03981** sono indistinguibili per il cloud, quindi compaiono entrambi come luci.
 
+> [!TIP]
+> I **videocitofoni** (Elvox TAB 5S, TAB 7S…) non fanno parte di Vimar View e qui non sono supportati. Per quelli puoi provare il progetto di terze parti [ha-vimar-intercom](https://github.com/ha-vimar/ha-vimar-intercom).
+
 Hai un dispositivo che non è in elenco? Vedi [Contribuire](#contribuire): di solito basta una breve cattura del traffico per aggiungerlo.
 
 ## Requisiti

@@ -16,6 +16,9 @@ from .gateway_models import supported_gateways
 
 _LOGGER = logging.getLogger(__name__)
 
+# Progetto di terze parti per i videocitofoni Vimar/Elvox (TAB 5S, TAB 7S…).
+INTERCOM_URL = "https://github.com/ha-vimar/ha-vimar-intercom"
+
 # Modelli noti restituiti dal cloud (campo "model" delle associazioni).
 MODEL_LABELS = {"BLEG": "Gateway", "STW": "Termostato"}
 
@@ -85,7 +88,10 @@ class VimarCloudConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # these do not expose the gateway Plant discovery protocol.
         supported = supported_gateways(gateways)
         if not supported:
-            return self.async_abort(reason="no_supported_gateways")
+            return self.async_abort(
+                reason="no_supported_gateways",
+                description_placeholders={"intercom_url": INTERCOM_URL},
+            )
 
         configured = self._async_current_ids()
         self._gateways = {

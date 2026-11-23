@@ -31,7 +31,7 @@
     "abort": {
       "already_configured": "Il gateway è già configurato.",
       "all_configured": "Tutti i gateway e termostati del tuo account sono già configurati.",
-      "no_supported_gateways": "Nessun gateway o termostato Vimar supportato è disponibile su questo account. Gli altri dispositivi associati (come TAB 5S) non possono essere aggiunti."
+      "no_supported_gateways": "Nessun gateway o termostato Vimar supportato è disponibile su questo account. I videocitofoni (come il TAB 5S) non sono supportati da questa integrazione: per quelli puoi provare il progetto di terze parti ha-vimar-intercom ({intercom_url})."
     }
   },
   "services": {
