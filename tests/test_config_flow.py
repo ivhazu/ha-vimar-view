@@ -9,6 +9,8 @@ GW = {"duid": "000000AAA00001", "displayname": "Casa", "model": "BLEG", "plantna
       "plantuid": "00000000-0000-0000-0000-000000000001", "online": True}
 TH = {"duid": "000000AAA00002", "displayname": "Zona Notte", "model": "STW", "plantname": "Zona Notte",
       "plantuid": "00000000-0000-0000-0000-000000000002", "online": True}
+TAB = {"duid": "000000AAA00003", "displayname": "TAB 5S", "model": "VPTW5",
+       "plantname": "Casa", "online": True}
 CREDS = {"username": "u@example.com", "password": "p"}
 
 
@@ -52,6 +54,22 @@ def test_already_configured_are_hidden():
     res = _run(_flow(configured={GW["duid"]}), [GW, TH])
     assert res["type"] == "create_entry" and res["data"][CONF_DUID] == TH["duid"]
     res = _run(_flow(configured={GW["duid"], TH["duid"]}), [GW, TH])
+    assert res == {"type": "abort", "reason": "all_configured"}
+
+
+def test_video_intercom_does_not_appear_in_gateway_choices():
+    res = _run(_flow(), [GW, TAB])
+    assert res["type"] == "create_entry"
+    assert res["data"][CONF_DUID] == GW["duid"]
+
+
+def test_only_video_intercom_has_no_supported_gateways():
+    res = _run(_flow(), [TAB])
+    assert res == {"type": "abort", "reason": "no_supported_gateways"}
+
+
+def test_configured_gateway_and_video_intercom_aborts_cleanly():
+    res = _run(_flow(configured={GW["duid"]}), [GW, TAB])
     assert res == {"type": "abort", "reason": "all_configured"}
 
 
