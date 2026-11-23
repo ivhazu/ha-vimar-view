@@ -36,7 +36,8 @@ async def async_setup_entry(
 
     # Routine dell'app VIEW (API REST): un errore qui non deve bloccare il resto.
     try:
-        routines = await client.load_routines()
+        # Le routine sono dell'entry del gateway, non dei termostati a sé (issue #19).
+        routines = [] if client.standalone_thermostat else await client.load_routines()
     except Exception as err:  # noqa: BLE001
         _LOGGER.warning("Vimar: could not load routines: %s", err)
         routines = []

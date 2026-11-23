@@ -170,6 +170,8 @@ Entity names follow the names you gave to devices in the Vimar app, and entity I
 | `number.<name>_riscaldamento_assenza` | Heating absence setpoint (5–20 °C) |
 | `number.<name>_riscaldamento_protezione_antigelo` | Frost protection threshold (3–10 °C) |
 | `number.<name>_raffreddamento_riduzione` | Cooling reduction setpoint (20–35 °C) |
+
+Each thermostat has its own DUID and is added as a separate entry; it is a device of its own, without a gateway. Routines and gateway events belong to the gateway entry and are not repeated on each thermostat.
 | `number.<name>_raffreddamento_assenza` | Cooling absence setpoint (25–35 °C) |
 
 **Presets** (they map to the thermostat operating modes):

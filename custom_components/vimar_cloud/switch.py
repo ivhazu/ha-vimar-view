@@ -31,7 +31,8 @@ async def async_setup_entry(
 
     # Interruttore "abilitata" per ogni routine dell'app VIEW.
     try:
-        routines = await client.load_routines()
+        # Le routine sono dell'entry del gateway, non dei termostati a sé (issue #19).
+        routines = [] if client.standalone_thermostat else await client.load_routines()
     except Exception as err:  # noqa: BLE001
         _LOGGER.warning("Vimar: could not load routines: %s", err)
         routines = []

@@ -170,6 +170,8 @@ I nomi delle entità seguono i nomi che hai dato ai dispositivi nell'app Vimar, 
 | `number.<nome>_riscaldamento_assenza` | Setpoint di assenza in riscaldamento (5–20 °C) |
 | `number.<nome>_riscaldamento_protezione_antigelo` | Soglia di protezione antigelo (3–10 °C) |
 | `number.<nome>_raffreddamento_riduzione` | Setpoint di riduzione in raffreddamento (20–35 °C) |
+
+Ogni termostato ha un DUID proprio e si aggiunge come voce separata; è un dispositivo a sé, senza gateway. Routine ed eventi del gateway appartengono alla voce del gateway e non vengono ripetuti su ogni termostato.
 | `number.<nome>_raffreddamento_assenza` | Setpoint di assenza in raffreddamento (25–35 °C) |
 
 **Preset** (corrispondono ai modi di funzionamento del termostato):

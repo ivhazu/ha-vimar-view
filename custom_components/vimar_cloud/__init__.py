@@ -8,7 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 from .api import VimarCloudClient
 from .const import CONF_DUID, CONF_PLANT_UID, CONF_REFRESH_TOKEN, DOMAIN
@@ -73,28 +73,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "Vimar cloud did not complete device discovery within 30s"
         ) from err
 
-    # Register gateway device first so via_device works for all children
     dev_reg = dr.async_get(hass)
-    gateway_device = dev_reg.async_get_or_create(
-        config_entry_id=entry.entry_id,
-        **gateway_device_info(entry, client),
-    )
-    client.gateway_device_id = gateway_device.id
+    if client.standalone_thermostat:
+        # Termostato Wi-Fi con DUID proprio: è lui il dispositivo principale.
+        # Niente gateway, registro eventi e routine: sono dell'entry del gateway (issue #19).
+        _remove_duplicate_gateway_device(hass, entry)
+    else:
+        # Register gateway device first so via_device works for all children
+        gateway_device = dev_reg.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            **gateway_device_info(entry, client),
+        )
+        client.gateway_device_id = gateway_device.id
 
-    # Routine: elenco, aggiornamento ogni 15 minuti e rilevamento delle esecuzioni.
-    tracker = RoutineTracker(hass, client, entry.data[CONF_DUID])
-    await tracker.async_start()
-    client.routine_tracker = tracker
+        # Routine: elenco, aggiornamento ogni 15 minuti e rilevamento delle esecuzioni.
+        tracker = RoutineTracker(hass, client, entry.data[CONF_DUID])
+        await tracker.async_start()
+        client.routine_tracker = tracker
 
-    # Registro eventi del gateway → eventi HA e sensore "Ultimo evento".
-    gateway_log = GatewayLogWatcher(hass, client)
-    await gateway_log.async_start()
-    client.gateway_log = gateway_log
+        # Registro eventi del gateway → eventi HA e sensore "Ultimo evento".
+        gateway_log = GatewayLogWatcher(hass, client)
+        await gateway_log.async_start()
+        client.gateway_log = gateway_log
 
-    # Telemetria energia BigData (solo le serie con dati).
-    telemetry = TelemetryManager(hass, client)
-    await telemetry.async_start()
-    client.telemetry = telemetry
+        # Telemetria energia BigData (solo le serie con dati).
+        telemetry = TelemetryManager(hass, client)
+        await telemetry.async_start()
+        client.telemetry = telemetry
 
     async_register_services(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -115,3 +120,23 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
     return unload_ok
+
+
+def _remove_duplicate_gateway_device(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Rimuove il gateway duplicato creato dalle versioni precedenti per un termostato."""
+    dev_reg = dr.async_get(hass)
+    device = dev_reg.async_get_device(identifiers={(DOMAIN, entry.entry_id)})
+    if device is None:
+        return
+    ent_reg = er.async_get(hass)
+    entities = [
+        e for e in er.async_entries_for_config_entry(ent_reg, entry.entry_id)
+        if e.device_id == device.id
+    ]
+    for ent in entities:
+        ent_reg.async_remove(ent.entity_id)
+    dev_reg.async_remove_device(device.id)
+    _LOGGER.info(
+        "Vimar: removed duplicate gateway device of thermostat entry %s (%d entities)",
+        entry.title, len(entities),
+    )

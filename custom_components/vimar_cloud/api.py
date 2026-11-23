@@ -753,6 +753,18 @@ class VimarCloudClient:
     def set_discovery_callback(self, callback: Callable) -> None:
         self._discovery_callback = callback
 
+    @property
+    def standalone_thermostat(self) -> bool:
+        """True se questa entry è un termostato Wi-Fi a sé (DUID proprio), non un gateway.
+
+        L'attach del termostato restituisce il nome e il MAC dell'impianto del
+        gateway: gateway, registro eventi e routine appartengono all'entry del
+        gateway e qui sarebbero duplicati (issue #19).
+        """
+        return bool(self.devices) and all(
+            d.get("device_type") == "thermostat" for d in self.devices.values()
+        )
+
     def get_state(self, idsf: int, sfetype: str) -> Any | None:
         return self.device_states.get(idsf, {}).get(sfetype)
 
