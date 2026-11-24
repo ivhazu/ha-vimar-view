@@ -166,6 +166,9 @@ class VimarCloudClient:
         self._running = False
         self._keepalive_task: asyncio.Task | None = None
         self._discovery_callback: Callable | None = None
+        # True when the last accepted plant discovery contained only valid objects:
+        # only a complete inventory may be used to remove devices from the registry.
+        self.discovery_complete = False
         # Discovery BigData (telemetria energia): elenco delle serie e segnale di arrivo.
         self.bigdata_sfs: list[dict] = []
         self.bigdata_received = asyncio.Event()
@@ -551,6 +554,29 @@ class VimarCloudClient:
                 item["_idambient"] = idambient
                 sf_list.append(item)
 
+        # An empty or malformed response is not an authoritative inventory.
+        # Never turn a temporary cloud failure into a removal of HA devices.
+        valid_sfs = [sf for sf in sf_list if isinstance(sf.get("idsf"), int)]
+        skipped = len(sf_list) - len(valid_sfs)
+        if not valid_sfs:
+            _LOGGER.warning("Vimar: ignoring empty plant discovery")
+            return
+        if skipped:
+            # Use the valid objects so that setup can proceed, but never use an
+            # incomplete inventory to remove devices from the registry.
+            _LOGGER.warning(
+                "Vimar: skipped %d plant objects without idsf; automatic cleanup disabled",
+                skipped,
+            )
+        sf_list = valid_sfs
+        self.discovery_complete = not skipped
+
+        # Replace each snapshot rather than retaining objects removed in VIEW.
+        self.devices = {}
+        self.measure_to_load = {}
+        self.automation_to_measure = {}
+        self.idsf_energy_manager = None
+
         load_idsfs: set[int] = set()
         automation_by_ambient_name: dict[tuple[Any, str], int] = {}
         measure_sfs: list[dict] = []
@@ -642,10 +668,24 @@ class VimarCloudClient:
 
         await self._register_idsf(idsf_to_register)
 
+        # Preserve status history only for objects still present in the plant,
+        # plus the BigData telemetry series (idsf 9000x), which are not part of
+        # the Plant discovery and are read by the kWh sensors.
+        active_idsfs = (
+            set(self.devices)
+            | set(self.measure_to_load)
+            | {sf["idsf"] for sf in self.bigdata_sfs}
+        )
+        self.device_states = {
+            idsf: state for idsf, state in self.device_states.items()
+            if idsf in active_idsfs
+        }
+
         _LOGGER.debug("Vimar: plant discovery complete, %d devices", len(self.devices))
         if self._discovery_callback:
-            self._discovery_callback()
+            callback = self._discovery_callback
             self._discovery_callback = None
+            callback()
 
         # Questo codice gira dentro il loop che legge i messaggi del WebSocket:
         # qui NON bisogna attendere risposte (wait_response), altrimenti il loop
@@ -750,7 +790,7 @@ class VimarCloudClient:
         except ValueError:
             pass
 
-    def set_discovery_callback(self, callback: Callable) -> None:
+    def set_discovery_callback(self, callback: Callable[[], None] | None) -> None:
         self._discovery_callback = callback
 
     @property

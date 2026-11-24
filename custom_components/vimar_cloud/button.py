@@ -1,10 +1,11 @@
-"""Vimar Cloud button platform — restore loads and scene activators."""
+"""Vimar Cloud button platform — restore loads, scenes, routines and device sync."""
 from __future__ import annotations
 
 import logging
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -33,6 +34,9 @@ async def async_setup_entry(
 
     if client.idsf_energy_manager is not None:
         entities.append(VimarRestoreAllLoadsButton(client, entry))
+
+    if not client.standalone_thermostat:
+        entities.append(VimarSyncDevicesButton(client, entry))
 
     # Routine dell'app VIEW (API REST): un errore qui non deve bloccare il resto.
     try:
@@ -75,6 +79,24 @@ class VimarRestoreAllLoadsButton(ButtonEntity):
 
     async def async_press(self) -> None:
         await self._client.restore_all_loads()
+
+
+class VimarSyncDevicesButton(ButtonEntity):
+    """Reload the entry to pick up devices added, renamed or removed in VIEW."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Sincronizza dispositivi"
+    _attr_icon = "mdi:sync"
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, client: VimarCloudClient, entry: ConfigEntry) -> None:
+        self._entry_id = entry.entry_id
+        self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_sync_devices"
+        self._attr_device_info = gateway_device_info(entry, client)
+
+    async def async_press(self) -> None:
+        # Reloading unloads this very entity: schedule it instead of awaiting it.
+        self.hass.config_entries.async_schedule_reload(self._entry_id)
 
 
 class VimarSceneButton(ButtonEntity):
