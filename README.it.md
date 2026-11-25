@@ -247,6 +247,7 @@ Gli scenari sono ancora **in fase di test**: se un pulsante non ha effetto, apri
 | `switch.<impianto>_<routine>_abilitata` | Abilita o sospende la routine |
 | `sensor.<impianto>_<routine>_ultima_esecuzione` | Data e ora dell'ultima esecuzione |
 | `sensor.<impianto>_ultimo_evento` | Ultima voce del registro eventi del gateway |
+| `button.<impianto>_sincronizza_dispositivi` | Ricarica l'integrazione per recepire dispositivi aggiunti, rinominati o rimossi nell'app VIEW (configurazione) |
 </details>
 
 ## Routine
@@ -414,6 +415,12 @@ actions:
 ```
 
 ## Risoluzione problemi
+
+<details>
+<summary><b>Un dispositivo eliminato nell'app VIEW è ancora in Home Assistant</b></summary>
+
+A ogni avvio (o con il pulsante **Sincronizza dispositivi**) l'integrazione rimuove i dispositivi che il cloud Vimar non riporta più. Per prudenza ne rimuove al massimo 2 alla volta e mai più del 10% del totale: negli impianti piccoli, o se ne hai eliminati molti insieme, non viene rimosso nulla in automatico e nel log compare un avviso. In quel caso apri il dispositivo in **Impostazioni → Dispositivi e servizi** e scegli **Elimina**: è consentito solo per i dispositivi che Vimar non riporta più (mai per il gateway o la gestione carichi).
+</details>
 
 <details>
 <summary><b>Attivare il log di debug</b></summary>

@@ -207,3 +207,25 @@ def _remove_missing_registry_devices(
             "Vimar: removed device %s deleted in VIEW (%d entities)",
             device.name, len(affected),
         )
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, entry: ConfigEntry, device: dr.DeviceEntry
+) -> bool:
+    """Consente di eliminare a mano un dispositivo solo se Vimar non lo riporta più.
+
+    Mai il gateway, mai la gestione carichi, mai un dispositivo ancora presente
+    nell'impianto. Serve quando la pulizia automatica all'avvio si ferma per
+    prudenza (impianti piccoli o più dispositivi rimossi insieme).
+    """
+    client: VimarCloudClient | None = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    if client is None or not client.discovery_complete:
+        return False
+    prefix = f"{entry.entry_id}_"
+    for domain, identifier in device.identifiers:
+        if domain != DOMAIN or not identifier.startswith(prefix):
+            continue
+        suffix = identifier[len(prefix):]
+        if suffix.isascii() and suffix.isdecimal():
+            return int(suffix) not in client.devices
+    return False

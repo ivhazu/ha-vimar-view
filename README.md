@@ -247,6 +247,7 @@ Scenes are still **being tested**: if a button has no effect, please open an [is
 | `switch.<plant>_<routine>_abilitata` | Enables or suspends the routine |
 | `sensor.<plant>_<routine>_ultima_esecuzione` | Date and time of the last run |
 | `sensor.<plant>_ultimo_evento` | Latest entry of the gateway event log |
+| `button.<plant>_sincronizza_dispositivi` | Reloads the integration to pick up devices added, renamed or removed in the VIEW app (configuration) |
 </details>
 
 ## Routines
@@ -414,6 +415,12 @@ actions:
 ```
 
 ## Troubleshooting
+
+<details>
+<summary><b>A device removed in the VIEW app is still in Home Assistant</b></summary>
+
+At every start (or with the **Sincronizza dispositivi** button) the integration removes the devices that the Vimar cloud no longer reports. To be safe it removes at most 2 devices at a time and never more than 10% of the total, so on small systems or when many devices were removed together nothing is removed automatically and a warning is written in the log. In that case open the device in **Settings → Devices & services** and choose **Delete**: it is allowed only for devices that Vimar no longer reports (never for the gateway or the load management).
+</details>
 
 <details>
 <summary><b>Enable debug logging</b></summary>
