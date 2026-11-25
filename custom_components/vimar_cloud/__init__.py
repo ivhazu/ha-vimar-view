@@ -14,6 +14,7 @@ from .api import VimarCloudClient
 from .const import CONF_DUID, CONF_PLANT_UID, CONF_REFRESH_TOKEN, DOMAIN
 from .device_info import gateway_device_info
 from .gateway_log import GatewayLogWatcher
+from .inventory import device_belongs_to_entry, is_conservative_cleanup, stale_device_ids
 from .routines import RoutineTracker
 from .services import async_register_services
 from .telemetry import TelemetryManager
@@ -103,6 +104,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async_register_services(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # Remove devices deleted in the VIEW app, comparing the registry with the
+    # discovery that setup has just received: no extra cloud calls. Additions
+    # and renames are already picked up by every (re)load.
+    if client.discovery_complete:
+        _remove_missing_registry_devices(hass, entry, set(client.devices))
     return True
 
 
@@ -140,3 +147,63 @@ def _remove_duplicate_gateway_device(hass: HomeAssistant, entry: ConfigEntry) ->
         "Vimar: removed duplicate gateway device of thermostat entry %s (%d entities)",
         entry.title, len(entities),
     )
+
+
+def _remove_missing_registry_devices(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    discovered_idsfs: set[int],
+) -> None:
+    """Remove this entry's physical devices that the cloud no longer reports.
+
+    Never remove a gateway, the virtual energy manager or a device owned by
+    another config entry, and never more than a few devices at once.
+    """
+    device_registry = dr.async_get(hass)
+    entity_registry = er.async_get(hass)
+    registered_devices = dr.async_entries_for_config_entry(
+        device_registry, entry.entry_id
+    )
+    stale_ids = stale_device_ids(
+        registered_devices,
+        entry_id=entry.entry_id,
+        discovered_idsfs=discovered_idsfs,
+        domain=DOMAIN,
+    )
+    if not stale_ids:
+        return
+
+    prefix = f"{entry.entry_id}_"
+    registered_count = sum(
+        1 for device in registered_devices
+        if any(
+            domain == DOMAIN and identifier.startswith(prefix)
+            and identifier[len(prefix):].isascii()
+            and identifier[len(prefix):].isdecimal()
+            for domain, identifier in device.identifiers
+        )
+    )
+    # A partial cloud result must never wipe a substantial part of a home.
+    if not is_conservative_cleanup(len(stale_ids), registered_count):
+        _LOGGER.warning(
+            "Vimar: refusing bulk registry cleanup (%d stale of %d physical devices). "
+            "Remove them manually if they were really deleted in the VIEW app.",
+            len(stale_ids), registered_count,
+        )
+        return
+
+    for device_id in stale_ids:
+        device = device_registry.async_get(device_id)
+        if device is None or not device_belongs_to_entry(device, entry.entry_id):
+            continue
+        affected = [
+            entity for entity in er.async_entries_for_config_entry(entity_registry, entry.entry_id)
+            if entity.device_id == device_id
+        ]
+        for entity in affected:
+            entity_registry.async_remove(entity.entity_id)
+        device_registry.async_remove_device(device_id)
+        _LOGGER.info(
+            "Vimar: removed device %s deleted in VIEW (%d entities)",
+            device.name, len(affected),
+        )
