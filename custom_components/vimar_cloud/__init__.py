@@ -132,7 +132,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 def _remove_duplicate_gateway_device(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Rimuove il gateway duplicato creato dalle versioni precedenti per un termostato."""
     dev_reg = dr.async_get(hass)
-    device = dev_reg.async_get_device(identifiers={(DOMAIN, entry.entry_id)})
+    identifier = (DOMAIN, entry.entry_id)
+    if hasattr(dev_reg, "async_get_device_by_identifier"):
+        # HA 2026.11+: async_get_device is deprecated (it stops working in
+        # 2027.8) because identifiers are unique only within a config entry.
+        device = dev_reg.async_get_device_by_identifier(identifier, entry.entry_id)
+    else:
+        device = dev_reg.async_get_device(identifiers={identifier})
     if device is None:
         return
     ent_reg = er.async_get(hass)
